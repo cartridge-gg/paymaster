@@ -1,0 +1,27 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": ["src/main.jsx"],
+  "project": ["src/**/*.{js,jsx,ts,tsx}"],
+  "ignore": [
+    "dist/**",
+    "build/**",
+    "public/**",
+    "tools/**",
+    "plugins/**"
+  ],
+  "vite": {
+    "config": ["vite.config.js"]
+  },
+  "tailwind": {
+    "config": ["tailwind.config.js"]
+  },
+  "postcss": {
+    "config": ["postcss.config.js"]
+  },
+  "eslint": {
+    "config": ["eslint.config.js"]
+  },
+  "prettier": {
+    "config": [".prettierrc.json"]
+  }
+}
