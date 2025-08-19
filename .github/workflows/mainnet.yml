@@ -19,7 +19,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./infra/paymaster.dockerfile
+          file: ./docker/paymaster.dockerfile
           push: true
           tags: |
             avnulabs/paymaster:${{ github.ref_name }}
@@ -28,7 +28,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./infra/cli.dockerfile
+          file: ./docker/cli.dockerfile
           push: true
           tags: |
             avnulabs/paymaster-cli:${{ github.ref_name }}
