@@ -7,7 +7,7 @@ COPY . .
 # Build for release.
 RUN cargo build --release --bin paymaster-cli
 
-FROM gcr.io/distroless/cc-debian12
+FROM debian:12-slim
 COPY --from=builder /paymaster/target/release/paymaster-cli .
 
 CMD ["./paymaster-cli"]
