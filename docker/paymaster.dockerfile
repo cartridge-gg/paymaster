@@ -4,7 +4,6 @@ ARG BUILD_TOKEN
 
 WORKDIR /paymaster
 
-# Now that the dependency is built, copy the source code
 COPY ./ .
 
 # Build for release.
