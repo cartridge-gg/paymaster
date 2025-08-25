@@ -29,6 +29,9 @@ pub struct QuickSetupParameters {
 
     #[clap(long, default_value = "default.json")]
     pub profile: String,
+
+    #[clap(short, long, help = "Force setup without user confirmation")]
+    pub force: bool,
 }
 
 /// CLI wrapper that uses the core deployment logic from the setup command
@@ -55,7 +58,8 @@ pub async fn command_quick_setup(params: QuickSetupParameters) -> Result<(), Err
         swap_interval: DEFAULT_SWAP_INTERVAL,
         max_price_impact: DEFAULT_MAX_PRICE_IMPACT,
         verbosity: DEFAULT_VERBOSITY.to_string(),
+        force: params.force,
     };
-    deploy_paymaster_core(setup_params, false).await?;
+    deploy_paymaster_core(setup_params, params.force).await?;
     Ok(())
 }
