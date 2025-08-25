@@ -99,6 +99,9 @@ pub struct SetupParameters {
 
     #[clap(long, default_value = DEFAULT_VERBOSITY)]
     pub verbosity: String,
+
+    #[clap(short, long, help = "Force setup without user confirmation")]
+    pub force: bool,
 }
 
 // Generate a random private key, from the starknet library
@@ -341,6 +344,7 @@ async fn perform_rebalancing(starknet: &Client, configuration: &ServiceConfigura
 
 /// CLI wrapper that uses the core deployment logic
 pub async fn command_setup(params: SetupParameters) -> Result<(), Error> {
-    deploy_paymaster_core(params, false).await?;
+    let skip_confirmation = params.force;
+    deploy_paymaster_core(params, skip_confirmation).await?;
     Ok(())
 }
