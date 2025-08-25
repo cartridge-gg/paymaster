@@ -5,3 +5,5 @@ target
 /profiles/*
 relayers.json
 rebalancing_test_report*
+
+.claude/settings.local.json
