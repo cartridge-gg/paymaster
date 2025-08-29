@@ -36,6 +36,9 @@ pub struct RelayersDeployCommandParameters {
 
     #[clap(long, default_value_t = DEFAULT_MAX_CHECK_STATUS_ATTEMPTS)]
     pub max_check_status_attempts: usize,
+
+    #[clap(short, long, help = "Force deployment without user confirmation")]
+    pub force: bool,
 }
 
 pub async fn command_relayers_deploy(params: RelayersDeployCommandParameters) -> Result<(), Error> {
@@ -70,22 +73,24 @@ pub async fn command_relayers_deploy(params: RelayersDeployCommandParameters) ->
         .await
         .unwrap();
 
-    // Ask user for confirmation before proceeding
-    print!(
-        "Do you want to proceed with the deployment? This will transfer {} STRK tokens to your new relayers. (y/N): ",
-        format_units(fund_gas_tank_in_fri, 18)
-    );
-    io::stdout().flush().unwrap();
+    // Ask user for confirmation before proceeding (unless force flag is used)
+    if !params.force {
+        print!(
+            "Do you want to proceed with the deployment? This will transfer {} STRK tokens to your new relayers. (y/N): ",
+            format_units(fund_gas_tank_in_fri, 18)
+        );
+        io::stdout().flush().unwrap();
 
-    let mut input = String::new();
-    io::stdin()
-        .read_line(&mut input)
-        .map_err(|e| Error::Execution(format!("Failed to read user input: {}", e)))?;
+        let mut input = String::new();
+        io::stdin()
+            .read_line(&mut input)
+            .map_err(|e| Error::Execution(format!("Failed to read user input: {}", e)))?;
 
-    let input = input.trim().to_lowercase();
-    if input != "y" && input != "yes" {
-        info!("Deployment cancelled by user.");
-        return Ok(());
+        let input = input.trim().to_lowercase();
+        if input != "y" && input != "yes" {
+            info!("Deployment cancelled by user.");
+            return Ok(());
+        }
     }
 
     info!("Proceeding with contracts deployment...");

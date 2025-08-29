@@ -23,19 +23,30 @@ pub struct EmptyPaymasterParameters {
 
     #[clap(long)]
     pub profile: String,
+
+    #[clap(short, long, help = "Force emptying without user confirmation")]
+    pub force: bool,
 }
 
 /// Core empty paymaster logic that can be reused by both CLI and integration tests
-pub async fn empty_paymaster_core(starknet: &Client, configuration: &ServiceConfiguration, master_address: Felt, master_pk: Felt) -> Result<Felt, Error> {
+pub async fn empty_paymaster_core(
+    starknet: &Client,
+    configuration: &ServiceConfiguration,
+    master_address: Felt,
+    master_pk: Felt,
+    skip_confirmation: bool,
+) -> Result<Felt, Error> {
     info!("🧹 Emptying paymaster (gas tank + relayers + estimate account) to master account...");
 
-    // Warn user that this will empty the paymaster and all relayers will be deactivated
-    warn!("⚠️ This will empty the paymaster and all relayers will be deactivated");
-    warn!("⚠️ Are you sure you want to proceed? (y/N): ");
-    let mut input = String::new();
-    stdin().read_line(&mut input).unwrap();
-    if input.trim().to_lowercase() != "y" {
-        return Ok(Felt::ZERO);
+    // Warn user that this will empty the paymaster and all relayers will be deactivated (unless skip_confirmation is true)
+    if !skip_confirmation {
+        warn!("⚠️ This will empty the paymaster and all relayers will be deactivated");
+        warn!("⚠️ Are you sure you want to proceed? (y/N): ");
+        let mut input = String::new();
+        stdin().read_line(&mut input).unwrap();
+        if input.trim().to_lowercase() != "y" {
+            return Ok(Felt::ZERO);
+        }
     }
 
     let master_account = starknet.initialize_account(&StarknetAccountConfiguration {
@@ -183,7 +194,7 @@ pub async fn command_empty_paymaster(params: EmptyPaymasterParameters) -> Result
         timeout: configuration.starknet.timeout,
     });
 
-    empty_paymaster_core(&starknet, &configuration, params.master_address, params.master_pk).await?;
+    empty_paymaster_core(&starknet, &configuration, params.master_address, params.master_pk, params.force).await?;
 
     Ok(())
 }
