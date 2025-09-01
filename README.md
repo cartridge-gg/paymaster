@@ -38,7 +38,7 @@ cargo build --release --bin paymaster-service
 ### Docker
 
 ```bash
-docker pull avnu/paymaster:latest
+docker pull avnulabs/paymaster:latest
 
 # Or build locally:
 docker build -t paymaster:latest .
