@@ -33,6 +33,9 @@ pub struct RelayersRebalanceCommandParameters {
 
     #[clap(long)]
     pub profile: String,
+
+    #[clap(short, long, help = "Force rebalancing without user confirmation")]
+    pub force: bool,
 }
 
 pub async fn command_relayers_rebalance(params: RelayersRebalanceCommandParameters) -> Result<(), Error> {
@@ -99,22 +102,24 @@ pub async fn command_relayers_rebalance(params: RelayersRebalanceCommandParamete
     let mut refund_call = None;
     // Refund the gas tank if necessary (transfer STRK to the gas tank from the master account)
     if additional_strk_balance > Felt::ZERO {
-        // Ask user for confirmation before proceeding
-        print!(
-            "Do you want to proceed with the rebalance? This will transfer an additional {} STRK tokens to the gas tank. (y/N): ",
-            format_units(additional_strk_balance, 18)
-        );
-        stdout().flush().unwrap();
+        // Ask user for confirmation before proceeding (unless force flag is used)
+        if !params.force {
+            print!(
+                "Do you want to proceed with the rebalance? This will transfer an additional {} STRK tokens to the gas tank. (y/N): ",
+                format_units(additional_strk_balance, 18)
+            );
+            stdout().flush().unwrap();
 
-        let mut input = String::new();
-        stdin()
-            .read_line(&mut input)
-            .map_err(|e| Error::Execution(format!("Failed to read user input: {}", e)))?;
+            let mut input = String::new();
+            stdin()
+                .read_line(&mut input)
+                .map_err(|e| Error::Execution(format!("Failed to read user input: {}", e)))?;
 
-        let input = input.trim().to_lowercase();
-        if input != "y" && input != "yes" {
-            info!("Deployment cancelled by user.");
-            return Ok(());
+            let input = input.trim().to_lowercase();
+            if input != "y" && input != "yes" {
+                info!("Deployment cancelled by user.");
+                return Ok(());
+            }
         }
 
         refund_call = Some(
