@@ -52,7 +52,7 @@ impl ChainID {
             "SN_SEPOLIA" => Ok(Self::Sepolia),
             "mainnet" => Ok(Self::Mainnet),
             "Mainnet" => Ok(Self::Mainnet),
-            "SN_MAINMET" => Ok(Self::Mainnet),
+            "SN_MAINNET" => Ok(Self::Mainnet),
             "main" => Ok(Self::Mainnet),
             "MAIN" => Ok(Self::Mainnet),
             _ => Err(Error::TypedDataDecoding(format!("invalid domain {}", s))),
