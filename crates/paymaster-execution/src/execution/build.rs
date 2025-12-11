@@ -5,6 +5,7 @@ use starknet::core::types::{BroadcastedTransaction, Felt};
 use starknet::macros::felt;
 use uuid::Uuid;
 
+use crate::diagnostics::DiagnosticClient;
 use crate::execution::deploy::DeploymentParameters;
 use crate::execution::fee::FeeEstimate;
 use crate::execution::ExecutionParameters;
@@ -58,19 +59,24 @@ impl Transaction {
     /// if it is an invoke. Then, it performs an estimate call on Starknet and return both the estimated fee and the
     /// suggested max fee. The former correspond to the actual value returned by Starknet while the latter corresponds
     /// to the fee that should be used to guarantee a valid execution.
+    ///
+    /// The client's `diagnostic_client` is used to extract and log diagnostic information from simulation errors.
     pub async fn estimate(self, client: &Client) -> Result<EstimatedTransaction, Error> {
         self.check_parameters_valid()?;
 
         let transactions = self.build_transactions(client).await?;
         let token = client.price.fetch_token(self.parameters.gas_token()).await?;
 
-        let estimated_fee_in_strk: u128 = client
-            .starknet
-            .estimate_transactions(&transactions)
-            .await?
-            .into_iter()
-            .map(|x| x.overall_fee)
-            .sum();
+        let fee_estimate_result = client.starknet.estimate_transactions(&transactions).await;
+        let estimated_fee_in_strk: u128 = match fee_estimate_result {
+            Ok(estimates) => estimates.into_iter().map(|x| x.overall_fee).sum(),
+            Err(e) => {
+                // Extract diagnostic information from the failed simulation
+                self.report_simulation_error(&client.diagnostic_client, &e).await;
+                return Err(e.into());
+            },
+        };
+
         // TODO: update this
         let estimated_fee_in_strk = Felt::from(estimated_fee_in_strk);
 
@@ -93,6 +99,13 @@ impl Transaction {
                 suggested_max_fee_in_gas_token,
             },
         })
+    }
+
+    /// Analyzes a simulation error and logs diagnostic information.
+    async fn report_simulation_error(&self, diagnostic_client: &DiagnosticClient, error: &paymaster_starknet::Error) {
+        let calls = self.transaction.calls();
+        let user_address = self.transaction.user_address();
+        diagnostic_client.report(&calls, user_address, error.to_string()).await;
     }
 
     // Check that the transaction has valid time bounds and that it contains at least one call
