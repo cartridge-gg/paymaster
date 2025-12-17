@@ -54,16 +54,14 @@ impl<'a> RequestContext<'a> {
         Err(Error::InvalidAPIKey)
     }
 
-    pub async fn fetch_available_tokens(&self) -> Result<Vec<TokenPrice>, Error> {
-        let tokens = self
-            .context
+    pub async fn fetch_available_tokens(&self) -> Vec<TokenPrice> {
+        self.context
             .price
             .fetch_tokens(&self.context.configuration.supported_tokens)
-            .await?
+            .await
             .into_iter()
-            .filter(|x| !x.price_in_strk.is_zero())
-            .collect();
-
-        Ok(tokens)
+            .filter_map(Result::ok)
+            .filter(|tp| !tp.price_in_strk.is_zero())
+            .collect()
     }
 }
