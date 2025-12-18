@@ -38,6 +38,8 @@ mod tests {
         }
     }
 
+    // TODO: enable when we can fix starknet image
+    #[ignore]
     #[tokio::test]
     async fn is_available_returns_true() {
         let test = TestEnvironment::new().await;
@@ -47,6 +49,8 @@ mod tests {
         assert!(result)
     }
 
+    // TODO: enable when we can fix starknet image
+    #[ignore]
     #[tokio::test]
     async fn is_available_returns_false() {
         let test = TestEnvironment::new().await;

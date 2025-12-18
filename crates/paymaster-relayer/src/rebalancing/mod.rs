@@ -1234,6 +1234,8 @@ mod integration_tests {
     /// 4. Executes the complete rebalancing flow
     /// 5. Verifies that balances have been updated
     #[tokio::test]
+    // TODO: enable when we can fix starknet image
+    #[ignore]
     async fn test_full_rebalancing_flow_with_devnet() {
         // Setup test environment with devnet
         let test_env = TestEnvironment::new().await;
@@ -1407,6 +1409,8 @@ mod integration_tests {
     }
 
     /// Integration test to verify behavior when no rebalancing is needed
+    // TODO: enable when we can fix starknet image
+    #[ignore]
     #[tokio::test]
     async fn test_no_rebalancing_needed_with_devnet() {
         let test_env = TestEnvironment::new().await;

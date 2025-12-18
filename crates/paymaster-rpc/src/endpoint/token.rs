@@ -71,6 +71,8 @@ mod tests {
         }
     }
 
+    // TODO: enable when we can fix starknet image
+    #[ignore]
     #[tokio::test]
     async fn get_supported_tokens_works_properly() {
         let test = TestEnvironment::new().await;
