@@ -149,6 +149,8 @@ mod tests {
         }
     }
 
+    // TODO: enable when we can fix starknet image
+    #[ignore]
     #[tokio::test]
     async fn return_error_if_not_available() {
         let test = TestEnvironment::new().await;
@@ -206,8 +208,9 @@ mod tests {
         assert!(matches!(result, Err(Error::ServiceNotAvailable)))
     }
 
-    // TODO: Fix starknet-devnet
-    // #[tokio::test]
+    // TODO: enable when we can fix starknet image
+    #[ignore]
+    #[tokio::test]
     async fn execute_works_properly() {
         let test = TestEnvironment::new().await;
         let request_context = RequestContext::empty(&test.context());

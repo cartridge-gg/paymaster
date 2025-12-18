@@ -246,6 +246,8 @@ mod tests {
     use crate::testing::transaction::{an_eth_approve, an_eth_transfer};
     use crate::testing::{StarknetTestEnvironment, TestEnvironment};
 
+    // TODO: enable when we can fix starknet image
+    #[ignore]
     #[tokio::test]
     async fn execute_deploy_transaction_sponsored_works_properly() {
         let test = TestEnvironment::new().await;
@@ -290,8 +292,9 @@ mod tests {
         assert!(result.is_ok())
     }
 
-    // TODO: fix starknet-devnet
-    // #[tokio::test]
+    // TODO: enable when we can fix starknet image
+    #[ignore]
+    #[tokio::test]
     async fn execute_invoke_transaction_works_properly() {
         let test = TestEnvironment::new().await;
         let account = test.starknet.initialize_account(&StarknetTestEnvironment::ACCOUNT_1);
@@ -349,8 +352,9 @@ mod tests {
         assert!(result.is_ok())
     }
 
-    // TODO: fix starknet-devnet
-    // #[tokio::test]
+    // TODO: enable when we can fix starknet image
+    #[ignore]
+    #[tokio::test]
     async fn execute_deploy_and_invoke_transaction_works_properly() {
         let test = TestEnvironment::new().await;
         let account = test.starknet.initialize_account(&StarknetTestEnvironment::ACCOUNT_1);

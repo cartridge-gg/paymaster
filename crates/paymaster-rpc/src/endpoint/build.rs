@@ -244,6 +244,8 @@ mod tests {
         }
     }
 
+    // TODO: enable when we can fix starknet image
+    #[ignore]
     #[tokio::test]
     async fn return_error_if_not_available() {
         let test = TestEnvironment::new().await;
@@ -272,6 +274,8 @@ mod tests {
         assert!(matches!(result, Err(Error::ServiceNotAvailable)))
     }
 
+    // TODO: enable when we can fix starknet image
+    #[ignore]
     #[tokio::test]
     async fn return_error_if_token_not_supported() {
         let test = TestEnvironment::new().await;
@@ -297,6 +301,8 @@ mod tests {
         assert!(matches!(result, Err(Error::TokenNotSupported)))
     }
 
+    // TODO: enable when we can fix starknet image
+    #[ignore]
     #[tokio::test]
     async fn build_works_properly() {
         let test = TestEnvironment::new().await;

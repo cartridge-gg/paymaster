@@ -321,6 +321,8 @@ mod tests {
     use crate::testing::transaction::an_eth_transfer;
     use crate::testing::{StarknetTestEnvironment, TestEnvironment};
 
+    // TODO: enable when we can fix starknet image
+    #[ignore]
     #[tokio::test]
     async fn build_invoke_works_properly() {
         let test = TestEnvironment::new().await;
@@ -362,6 +364,8 @@ mod tests {
         assert_eq!(calls[1].calldata, vec![StarknetTestEnvironment::FORWARDER, felt!("0xe38f9fc02c000"), Felt::ZERO]);
     }
 
+    // TODO: enable when we can fix starknet image
+    #[ignore]
     #[tokio::test]
     async fn build_deploy_works_properly() {
         let test = TestEnvironment::new().await;
@@ -413,6 +417,8 @@ mod tests {
         assert_eq!(calls[0].calldata, vec![StarknetTestEnvironment::FORWARDER, felt!("0x180fe9bc2e4000"), Felt::ZERO]);
     }
 
+    // TODO: enable when we can fix starknet image
+    #[ignore]
     #[tokio::test]
     async fn build_deploy_sponsored_works_properly() {
         let test = TestEnvironment::new().await;
@@ -457,6 +463,8 @@ mod tests {
         assert_eq!(calls.len(), 0);
     }
 
+    // TODO: enable when we can fix starknet image
+    #[ignore]
     #[tokio::test]
     async fn estimate_deploy_and_invoke_same_contract_works_properly() {
         let test = TestEnvironment::new().await;
@@ -516,6 +524,8 @@ mod tests {
         assert_eq!(calls[1].calldata, vec![StarknetTestEnvironment::FORWARDER, felt!("0x1b6253b33b4000"), Felt::ZERO]);
     }
 
+    // TODO: enable when we can fix starknet image
+    #[ignore]
     #[tokio::test]
     async fn estimate_deploy_and_invoke_works_properly() {
         let test = TestEnvironment::new().await;

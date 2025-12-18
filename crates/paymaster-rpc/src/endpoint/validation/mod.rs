@@ -57,6 +57,8 @@ mod tests {
         ExecutionParameters::V1 { fee_mode, time_bounds: None }
     }
 
+    // TODO: enable when we can fix starknet image
+    #[ignore]
     #[tokio::test]
     #[rustfmt::skip]
     async fn self_sponsoring_is_working_properly() {
@@ -80,6 +82,8 @@ mod tests {
         check_is_allowed_fee_mode(&dummy_api_key, &params(FeeMode::Sponsored{ tip: TipPriority::Normal})).await.unwrap();
     }
 
+    // TODO: enable when we can fix starknet image
+    #[ignore]
     #[tokio::test]
     #[rustfmt::skip]
     async fn gasless_only_access_is_working_properly() {

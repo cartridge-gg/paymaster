@@ -227,6 +227,8 @@ mod tests {
 
     use crate::testing::TestEnvironment;
 
+    // TODO: enable when we can fix starknet image
+    #[ignore]
     #[tokio::test]
     async fn apply_max_fee_modifier_properly() {
         let test = TestEnvironment::new().await;
@@ -240,6 +242,8 @@ mod tests {
         assert_eq!(result, Felt::from(33500));
     }
 
+    // TODO: enable when we can fix starknet image
+    #[ignore]
     #[tokio::test]
     async fn apply_provider_fee_overhead_properly() {
         let test = TestEnvironment::new().await;
