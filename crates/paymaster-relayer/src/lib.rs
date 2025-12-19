@@ -154,7 +154,7 @@ mod tests {
         use std::time::Duration;
 
         use async_trait::async_trait;
-        use paymaster_starknet::constants::{Endpoint, Token};
+        use paymaster_starknet::constants::Token;
         use paymaster_starknet::{ChainID, Configuration as StarknetConfiguration, StarknetAccountConfiguration};
         use starknet::core::types::Felt;
         use starknet::macros::felt;
@@ -192,10 +192,10 @@ mod tests {
         fn configuration() -> RelayerManagerConfiguration {
             RelayerManagerConfiguration {
                 starknet: StarknetConfiguration {
+                    endpoint: "https://dummy".to_string(),
                     chain_id: ChainID::Sepolia,
-                    endpoint: Endpoint::default_rpc_url(&ChainID::Sepolia).to_string(),
-                    fallbacks: vec![],
                     timeout: 10,
+                    fallbacks: vec![],
                 },
                 supported_tokens: HashSet::from([Token::usdc(&ChainID::Sepolia).address]),
                 gas_tank: StarknetAccountConfiguration {

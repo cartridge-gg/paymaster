@@ -62,7 +62,7 @@ impl RelayerBalanceMonitoring {
 
         for relayer in relayers {
             executor.register(task!(|ctx| {
-                ctx.starknet.fetch_balance(Token::strk(ctx.starknet.chain_id()).address, relayer).await.map(|x| (relayer, x))
+                ctx.starknet.fetch_balance(Token::STRK_ADDRESS, relayer).await.map(|x| (relayer, x))
             }));
         }
 
@@ -82,68 +82,5 @@ impl RelayerBalanceMonitoring {
         }
 
         Ok(balances)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::collections::{HashSet, LinkedList};
-    use std::sync::Arc;
-    use std::time::Duration;
-
-    use async_trait::async_trait;
-    use paymaster_starknet::constants::{Endpoint, Token};
-    use paymaster_starknet::{ChainID, Configuration as StarknetConfiguration, StarknetAccountConfiguration};
-    use starknet::core::types::Felt;
-    use starknet::macros::felt;
-    use tokio::sync::RwLock;
-
-    use crate::lock::mock::MockLockLayer;
-    use crate::lock::LockLayerConfiguration;
-    use crate::rebalancing::{OptionalRebalancingConfiguration, RelayerManagerConfiguration};
-    use crate::RelayersConfiguration;
-
-    #[derive(Default, Debug)]
-    pub struct Lock(Arc<RwLock<LinkedList<Felt>>>);
-
-    #[async_trait]
-    impl MockLockLayer for Lock {
-        fn new() -> Self
-        where
-            Self: Sized,
-        {
-            Self(Arc::new(RwLock::new(LinkedList::new())))
-        }
-
-        async fn count_enabled_relayers(&self) -> usize {
-            self.0.read().await.len()
-        }
-
-        async fn set_enabled_relayers(&self, relayers: &HashSet<Felt>) {
-            self.0.write().await.extend(relayers)
-        }
-    }
-
-    fn configuration() -> RelayerManagerConfiguration {
-        RelayerManagerConfiguration {
-            starknet: StarknetConfiguration {
-                chain_id: ChainID::Sepolia,
-                endpoint: Endpoint::default_rpc_url(&ChainID::Sepolia).to_string(),
-                fallbacks: vec![],
-                timeout: 10,
-            },
-            supported_tokens: HashSet::from([Token::usdc(&ChainID::Sepolia).address]),
-            gas_tank: StarknetAccountConfiguration {
-                address: felt!("0x0"),
-                private_key: felt!("0x0"),
-            },
-            relayers: RelayersConfiguration {
-                min_relayer_balance: Felt::ZERO,
-                private_key: felt!("0x0"),
-                addresses: vec![felt!("0x0")],
-                lock: LockLayerConfiguration::mock_with_timeout::<Lock>(Duration::from_secs(5)),
-                rebalancing: OptionalRebalancingConfiguration::initialize(None),
-            },
-        }
     }
 }

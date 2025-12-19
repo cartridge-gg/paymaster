@@ -41,6 +41,9 @@ pub mod testing;
 
 mod client;
 
+pub const DEFAULT_SEPOLIA_RPC_ENDPOINT: &str = "https://rpc.starknet-testnet.lava.build/rpc/v0_9";
+pub const DEFAULT_MAINNET_RPC_ENDPOINT: &str = "https://rpc.starknet.lava.build/rpc/v0_9";
+
 pub type StarknetAccount = SingleOwnerAccount<StarknetClient, LocalWallet>;
 
 #[macro_export]
