@@ -35,7 +35,9 @@ impl ExecutableTransactionParameters {
             ExecutableTransactionParameters::Deploy { deployment } => deployment.get_unique_identifier(),
             ExecutableTransactionParameters::Invoke { invoke } => invoke.get_unique_identifier(),
             ExecutableTransactionParameters::DeployAndInvoke { invoke, .. } => invoke.get_unique_identifier(),
-            ExecutableTransactionParameters::RawInvoke { user, execute_from_outside_call, .. } => {
+            ExecutableTransactionParameters::RawInvoke {
+                user, execute_from_outside_call, ..
+            } => {
                 let mut hasher = DefaultHasher::new();
                 user.hash(&mut hasher);
                 execute_from_outside_call.calldata.hash(&mut hasher);
@@ -130,7 +132,9 @@ impl ExecutableTransaction {
                 let transfer = invoke.find_gas_token_transfer(self.forwarder)?;
                 (transfer.token(), transfer.amount())
             },
-            ExecutableTransactionParameters::RawInvoke { gas_token, max_gas_token_amount, .. } => {
+            ExecutableTransactionParameters::RawInvoke {
+                gas_token, max_gas_token_amount, ..
+            } => {
                 let token = gas_token.ok_or(Error::InvalidTypedData)?;
                 let amount = max_gas_token_amount.ok_or(Error::InvalidTypedData)?;
                 (token, amount)

@@ -17,8 +17,8 @@ use crate::endpoint::token::get_supported_tokens_endpoint;
 use crate::endpoint::RequestContext;
 use crate::middleware::{AuthenticationLayer, PayloadFormatter};
 use crate::{
-    BuildTransactionRequest, BuildTransactionResponse, Configuration, Error, ExecuteRawRequest, ExecuteRawResponse, ExecuteRequest, ExecuteResponse,
-    PaymasterAPIServer, TokenPrice,
+    BuildTransactionRequest, BuildTransactionResponse, Configuration, Error, ExecuteRawRequest, ExecuteRawResponse, ExecuteRequest, ExecuteResponse, PaymasterAPIServer,
+    TokenPrice,
 };
 
 #[macro_export]
