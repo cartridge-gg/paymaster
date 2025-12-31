@@ -43,7 +43,7 @@ pub async fn command_relayers_rebalance(params: RelayersRebalanceCommandParamete
 
     // Load the configuration from the profile
     let configuration = ServiceConfiguration::from_file(&params.profile).unwrap();
-    let chain_id = configuration.starknet.chain_id.clone();
+    let chain_id = configuration.starknet.chain_id;
     let rpc_url = configuration.starknet.endpoint.clone();
 
     // Print the parameters to the user
@@ -53,7 +53,7 @@ pub async fn command_relayers_rebalance(params: RelayersRebalanceCommandParamete
 
     let starknet = Client::new(&Configuration {
         endpoint: rpc_url,
-        chain_id: chain_id.clone(),
+        chain_id,
         fallbacks: vec![],
         timeout: configuration.starknet.timeout,
     });
@@ -73,7 +73,7 @@ pub async fn command_relayers_rebalance(params: RelayersRebalanceCommandParamete
     // Initialize the rebalancing service
     let rebalancing_service = RelayerRebalancingService::new(Context::new(RelayerManagerConfiguration {
         starknet: configuration.starknet.clone(),
-        gas_tank: configuration.gas_tank.clone(),
+        gas_tank: configuration.gas_tank,
         relayers: configuration.relayers.clone(),
         supported_tokens: configuration.supported_tokens.clone(),
     }))

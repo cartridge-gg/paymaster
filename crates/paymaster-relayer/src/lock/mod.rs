@@ -116,7 +116,7 @@ pub enum LockLayer {
 impl LockLayer {
     pub fn new(configuration: &RelayerManagerConfiguration) -> Self {
         match &configuration.relayers.lock {
-            LockLayerConfiguration::Shared { redis, .. } => LockLayer::Shared(SharedLockLayer::new(configuration, &redis)),
+            LockLayerConfiguration::Shared { redis, .. } => LockLayer::Shared(SharedLockLayer::new(configuration, redis)),
             LockLayerConfiguration::Seggregated { .. } => LockLayer::Seggregated(SeggregatedLockLayer::new(configuration)),
 
             #[cfg(feature = "testing")]

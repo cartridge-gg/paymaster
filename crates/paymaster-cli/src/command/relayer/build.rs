@@ -54,7 +54,7 @@ impl RelayerDeployment {
     pub async fn build_many(starknet: &Client, forwarder: Felt, private_key: Felt, count: usize, fund: Felt) -> Result<Self, Error> {
         let mut deployment = vec![];
         for _ in 0..count {
-            deployment.push(RelayerDeployment::build_one(&starknet, forwarder, private_key, fund).await?);
+            deployment.push(RelayerDeployment::build_one(starknet, forwarder, private_key, fund).await?);
         }
 
         let calls = deployment.iter().fold(Calls::empty(), |mut calls, x| {

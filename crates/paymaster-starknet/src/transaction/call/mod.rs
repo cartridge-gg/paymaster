@@ -113,7 +113,7 @@ impl Calls {
     }
 
     pub fn as_execute_from_outside_call(&self, caller_address: Felt, to: StarknetAccount, to_private_key: Felt, time_bounds: TimeBounds) -> Call {
-        let to_address = to.address().clone();
+        let to_address = to.address();
         // Create execute_from_outside message
         let execute_from_outside_message = ExecuteFromOutsideMessage::new(
             PaymasterVersion::V1,
@@ -135,7 +135,7 @@ impl Calls {
         let signature = signing_key.sign(&message_hash).unwrap();
 
         // Create the execute_from_outside call
-        return execute_from_outside_message.to_call(to.address(), &vec![signature.r, signature.s]);
+        execute_from_outside_message.to_call(to.address(), &vec![signature.r, signature.s])
     }
 }
 

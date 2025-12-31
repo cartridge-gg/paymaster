@@ -37,6 +37,12 @@ use std::collections::HashMap;
 
 pub struct Metadata(pub HashMap<String, DiagnosticValue>);
 
+impl Default for Metadata {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Metadata {
     pub fn new() -> Self {
         Metadata(HashMap::new())

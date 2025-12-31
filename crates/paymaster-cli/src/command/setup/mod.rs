@@ -254,11 +254,11 @@ pub async fn deploy_paymaster_core(params: SetupParameters, skip_user_confirmati
         relayers: RelayersConfiguration {
             private_key: shared_relayers_pk,
             addresses: relayers_deployment.addresses,
-            min_relayer_balance: Felt::from(normalize_felt(params.min_relayer_balance, 18)),
+            min_relayer_balance: normalize_felt(params.min_relayer_balance, 18),
             lock: DEFAULT_RELAYERS_LOCK_MODE,
             rebalancing: OptionalRebalancingConfiguration::initialize(Some(RebalancingConfiguration {
                 check_interval: params.rebalancing_check_interval,
-                trigger_balance: Felt::from(normalize_felt(params.rebalancing_trigger_balance, 18)),
+                trigger_balance: normalize_felt(params.rebalancing_trigger_balance, 18),
                 swap_config: SwapConfiguration {
                     slippage: params.swap_slippage,
                     swap_client_config: SwapClientConfigurator::AVNU(SwapClientConfiguration::default_from_chain(chain_id)),
@@ -309,7 +309,7 @@ async fn perform_rebalancing(starknet: &Client, configuration: &ServiceConfigura
     // Create a temporary relayer manager configuration for initial rebalancing
     let relayer_manager_config = RelayerManagerConfiguration {
         starknet: configuration.starknet.clone(),
-        gas_tank: configuration.gas_tank.clone(),
+        gas_tank: configuration.gas_tank,
         relayers: configuration.relayers.clone(),
         supported_tokens: configuration.supported_tokens.clone(),
     };
@@ -319,26 +319,23 @@ async fn perform_rebalancing(starknet: &Client, configuration: &ServiceConfigura
     let rebalancing_service = RelayerRebalancingService::new(relayer_context.clone()).await;
 
     // Perform initial rebalancing to distribute funds to relayers
-    match rebalancing_service.try_rebalance(initial_gas_tank_fund).await {
-        Ok(rebalancing_calls) => {
-            if !rebalancing_calls.is_empty() {
-                info!("➡️ Initial rebalancing prepared successfully");
+    if let Ok(rebalancing_calls) = rebalancing_service.try_rebalance(initial_gas_tank_fund).await {
+        if !rebalancing_calls.is_empty() {
+            info!("➡️ Initial rebalancing prepared successfully");
 
-                // Get gas tank account
-                let gas_tank_account = starknet.initialize_account(&StarknetAccountConfiguration {
-                    address: configuration.gas_tank.address,
-                    private_key: configuration.gas_tank.private_key,
-                });
+            // Get gas tank account
+            let gas_tank_account = starknet.initialize_account(&StarknetAccountConfiguration {
+                address: configuration.gas_tank.address,
+                private_key: configuration.gas_tank.private_key,
+            });
 
-                return Ok(rebalancing_calls.as_execute_from_outside_call(
-                    master_address,
-                    gas_tank_account,
-                    configuration.gas_tank.private_key,
-                    TimeBounds::valid_for(Duration::from_secs(3600)),
-                ));
-            }
-        },
-        Err(_) => {},
+            return Ok(rebalancing_calls.as_execute_from_outside_call(
+                master_address,
+                gas_tank_account,
+                configuration.gas_tank.private_key,
+                TimeBounds::valid_for(Duration::from_secs(3600)),
+            ));
+        }
     }
     Err(Error::Execution(
         "⚠️ Initial rebalancing failed. Relayers will be activated by the background service.".to_string(),

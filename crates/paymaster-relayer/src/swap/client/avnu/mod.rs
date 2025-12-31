@@ -41,7 +41,7 @@ impl AVNUSwapClient {
     async fn get_quote(&self, sell_token: Felt, buy_token: Felt, sell_amount: Felt, taker_address: Felt, max_price_impact: f64) -> Result<AVNUQuote, ServiceError> {
         let response = self
             .client
-            .get(&format!("{}/quotes", self.endpoint))
+            .get(format!("{}/quotes", self.endpoint))
             .query(&[
                 ("sellTokenAddress", &format!("0x{:x}", sell_token)),
                 ("buyTokenAddress", &format!("0x{:x}", buy_token)),
@@ -83,7 +83,7 @@ impl AVNUSwapClient {
 
         let response = self
             .client
-            .post(&format!("{}/build", self.endpoint))
+            .post(format!("{}/build", self.endpoint))
             .json(&request_body)
             .send()
             .await

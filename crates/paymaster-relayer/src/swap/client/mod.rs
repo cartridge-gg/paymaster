@@ -17,6 +17,7 @@ use crate::swap::client::mock::MockSwapClient;
 
 // Trait to be implemented by any swap client
 #[async_trait]
+#[allow(clippy::too_many_arguments)]
 pub trait Swap: 'static + Send + Sync + Clone {
     // Swap tokens and return the calls needed to execute the swap, and the minimum amount of token received
     async fn swap(
@@ -123,6 +124,7 @@ impl SwapClient {
         Self::Mock(Arc::new(I::new()))
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn swap(
         &self,
         sell_token: Felt,

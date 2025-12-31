@@ -46,26 +46,26 @@ unless all variables are set via command line or environment variables."
     }
 }
 
-impl Into<paymaster_rpc::Configuration> for Context {
-    fn into(self) -> paymaster_rpc::Configuration {
+impl From<Context> for paymaster_rpc::Configuration {
+    fn from(val: Context) -> Self {
         paymaster_rpc::Configuration {
-            rpc: self.configuration.rpc,
+            rpc: val.configuration.rpc,
 
-            forwarder: self.configuration.forwarder,
-            gas_tank: self.configuration.gas_tank,
+            forwarder: val.configuration.forwarder,
+            gas_tank: val.configuration.gas_tank,
 
-            supported_tokens: self.configuration.supported_tokens,
+            supported_tokens: val.configuration.supported_tokens,
 
-            max_fee_multiplier: self.configuration.max_fee_multiplier,
-            provider_fee_overhead: self.configuration.provider_fee_overhead,
+            max_fee_multiplier: val.configuration.max_fee_multiplier,
+            provider_fee_overhead: val.configuration.provider_fee_overhead,
 
-            estimate_account: self.configuration.estimate_account,
+            estimate_account: val.configuration.estimate_account,
 
-            relayers: self.configuration.relayers,
+            relayers: val.configuration.relayers,
 
-            starknet: self.configuration.starknet,
-            price: self.configuration.price,
-            sponsoring: self.configuration.sponsoring,
+            starknet: val.configuration.starknet,
+            price: val.configuration.price,
+            sponsoring: val.configuration.sponsoring,
         }
     }
 }
