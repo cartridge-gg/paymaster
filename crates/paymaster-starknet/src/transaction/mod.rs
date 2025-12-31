@@ -146,7 +146,7 @@ impl ExecuteFromOutsideMessageV1 {
     }
 
     pub fn from_typed_data(value: &TypedData) -> Result<Self, Error> {
-        let decoder = TypedValueDecoder::new(&value.message());
+        let decoder = TypedValueDecoder::new(value.message());
         let object_decoder = decoder.decode_object()?;
 
         Ok(Self(ExecuteFromOutsideParameters {
@@ -276,7 +276,7 @@ impl ExecuteFromOutsideMessageV2 {
     }
 
     pub fn from_typed_data(value: &TypedData) -> Result<Self, Error> {
-        let decoder = TypedValueDecoder::new(&value.message());
+        let decoder = TypedValueDecoder::new(value.message());
         let object_decoder = decoder.decode_object()?;
 
         Ok(Self(ExecuteFromOutsideParameters {

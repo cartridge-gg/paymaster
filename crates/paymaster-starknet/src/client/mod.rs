@@ -66,11 +66,7 @@ impl Deref for StarknetRPCClient {
 
 impl FailurePredicate<ProviderError> for StarknetRPCClient {
     fn is_err(&self, err: &ProviderError) -> bool {
-        match err {
-            ProviderError::RateLimited => true,
-            ProviderError::Other(_) => true,
-            _ => false,
-        }
+        matches!(err, ProviderError::RateLimited | ProviderError::Other(_))
     }
 }
 

@@ -42,7 +42,7 @@ impl DiagnosticClient {
     /// It extracts diagnostics and logs them with appropriate tracing spans
     /// for CloudWatch/OTEL ingestion.
     pub async fn report(&self, calls: &Calls, user_address: Felt, error_message: String) {
-        let context = DiagnosticContext::new(&calls, &error_message, user_address);
+        let context = DiagnosticContext::new(calls, &error_message, user_address);
         for diagnostic in self.analyze(&context).await {
             self.log_diagnostic(&diagnostic);
         }

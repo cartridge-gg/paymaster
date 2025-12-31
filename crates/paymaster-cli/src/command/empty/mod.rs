@@ -178,7 +178,7 @@ pub async fn command_empty_paymaster(params: EmptyPaymasterParameters) -> Result
 
     // Load the configuration from the profile
     let configuration = ServiceConfiguration::from_file(&params.profile).unwrap();
-    let chain_id = configuration.starknet.chain_id.clone();
+    let chain_id = configuration.starknet.chain_id;
     let rpc_url = configuration.starknet.endpoint.clone();
 
     // Print the parameters to the user
@@ -188,7 +188,7 @@ pub async fn command_empty_paymaster(params: EmptyPaymasterParameters) -> Result
 
     let starknet = Client::new(&Configuration {
         endpoint: rpc_url,
-        chain_id: chain_id.clone(),
+        chain_id,
         fallbacks: vec![],
         timeout: configuration.starknet.timeout,
     });

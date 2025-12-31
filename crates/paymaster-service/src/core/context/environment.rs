@@ -33,9 +33,17 @@ impl Deref for JSONPath {
     }
 }
 
+impl std::str::FromStr for JSONPath {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(JSONPath(s.split('.').map(|x| x.to_lowercase().to_string()).collect()))
+    }
+}
+
 impl JSONPath {
-    pub fn from_str(s: &str) -> Self {
-        JSONPath(s.split(".").map(|x| x.to_lowercase().to_string()).collect())
+    pub fn parse(s: &str) -> Self {
+        s.parse().unwrap()
     }
 }
 
@@ -63,7 +71,7 @@ impl VariablesResolver {
         let specification: Value = serde_json::from_str(CONFIGURATION_SPECIFICATION).expect("invalid specification");
 
         let mut resolutions = HashMap::new();
-        resolutions.insert("profile".to_string(), JSONPath::from_str("profile"));
+        resolutions.insert("profile".to_string(), JSONPath::parse("profile"));
         resolutions.extend(resolve_variables(&[], specification));
 
         Self(resolutions)
@@ -140,13 +148,18 @@ impl From<HashMap<JSONPath, Value>> for Variables {
     }
 }
 
+impl IntoIterator for Variables {
+    type Item = (JSONPath, Value);
+    type IntoIter = IntoIter<JSONPath, Value>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
 impl Variables {
     pub fn get(&self, s: &str) -> Option<&Value> {
-        self.0.get(&JSONPath::from_str(s))
-    }
-
-    pub fn into_iter(self) -> IntoIter<JSONPath, Value> {
-        self.0.into_iter()
+        self.0.get(&JSONPath::parse(s))
     }
 }
 
@@ -160,13 +173,13 @@ mod tests {
 
     #[test]
     fn key_from_variable_works_properly() {
-        assert_eq!(JSONPath::from_str("foo-1").0, vec!["foo-1".to_string()]);
-        assert_eq!(JSONPath::from_str("Foo-1").0, vec!["foo-1".to_string()]);
-        assert_eq!(JSONPath::from_str("FOO-1").0, vec!["foo-1".to_string()]);
+        assert_eq!(JSONPath::parse("foo-1").0, vec!["foo-1".to_string()]);
+        assert_eq!(JSONPath::parse("Foo-1").0, vec!["foo-1".to_string()]);
+        assert_eq!(JSONPath::parse("FOO-1").0, vec!["foo-1".to_string()]);
 
-        assert_eq!(JSONPath::from_str("foo-1.bar-2").0, vec!["foo-1".to_string(), "bar-2".to_string()]);
-        assert_eq!(JSONPath::from_str("Foo-1.Bar-2").0, vec!["foo-1".to_string(), "bar-2".to_string()]);
-        assert_eq!(JSONPath::from_str("FOO-1.BAR-2").0, vec!["foo-1".to_string(), "bar-2".to_string()]);
+        assert_eq!(JSONPath::parse("foo-1.bar-2").0, vec!["foo-1".to_string(), "bar-2".to_string()]);
+        assert_eq!(JSONPath::parse("Foo-1.Bar-2").0, vec!["foo-1".to_string(), "bar-2".to_string()]);
+        assert_eq!(JSONPath::parse("FOO-1.BAR-2").0, vec!["foo-1".to_string(), "bar-2".to_string()]);
     }
 
     #[test]
@@ -199,7 +212,7 @@ mod tests {
 
         let mut resolver = VariablesResolver(HashMap::new());
         for (case, _, _) in &cases {
-            resolver.0.insert(case.to_string(), JSONPath::from_str(case));
+            resolver.0.insert(case.to_string(), JSONPath::parse(case));
         }
 
         for (case, value, expected) in cases {

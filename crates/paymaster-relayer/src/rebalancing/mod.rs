@@ -292,7 +292,7 @@ impl RelayerRebalancingService {
         relayers
     }
 
-    async fn has_at_least_one_relayer_below_trigger_balance(&self, relayers: &Vec<RelayerBalance>) -> bool {
+    async fn has_at_least_one_relayer_below_trigger_balance(&self, relayers: &[RelayerBalance]) -> bool {
         relayers
             .iter()
             .any(|relayer| relayer.balance < self.rebalancing_configuration.trigger_balance)

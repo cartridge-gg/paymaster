@@ -54,12 +54,12 @@ impl From<RelayerLock> for RedisRelayerLock {
     }
 }
 
-impl Into<RelayerLock> for RedisRelayerLock {
-    fn into(self) -> RelayerLock {
+impl From<RedisRelayerLock> for RelayerLock {
+    fn from(val: RedisRelayerLock) -> Self {
         RelayerLock {
-            expiry: self.expiry,
-            address: self.address,
-            nonce: self.nonce,
+            expiry: val.expiry,
+            address: val.address,
+            nonce: val.nonce,
         }
     }
 }
@@ -105,25 +105,21 @@ impl RedisRelayerLock {
         })
     }
 
-    // TODO: update redis dep
-    #[allow(dependency_on_unit_never_type_fallback)]
     pub async fn unlock(self, redis: &mut Connection) -> Result<(), Error> {
         let cache_key = CacheKey(self.address);
         if let Ok(value) = serde_json::to_vec(&self.nonce) {
-            redis.set_ex(cache_key, value, 60).await?;
+            redis.set_ex::<_, _, ()>(cache_key, value, 60).await?;
         }
 
         let lock_key = LockKey::Address(self.address);
-        redis.del(lock_key).await?;
+        redis.del::<_, ()>(lock_key).await?;
 
         Ok(())
     }
 
-    // TODO: update redis dep
-    #[allow(dependency_on_unit_never_type_fallback)]
     pub async fn unlock_with_expiry(self, redis: &mut Connection, expiry: u64) -> Result<(), Error> {
         let lock_key = LockKey::Address(self.address);
-        redis.set_ex(lock_key, Vec::<u8>::new(), expiry).await?;
+        redis.set_ex::<_, _, ()>(lock_key, Vec::<u8>::new(), expiry).await?;
 
         Ok(())
     }

@@ -14,7 +14,7 @@ pub struct GasTankDeployment {
 
 impl GasTankDeployment {
     pub async fn build(starknet: &Client, private_key: Felt, fund: Felt) -> Result<Self, Error> {
-        let gas_tank_deployment = DeployArgentAccount::initialize(&starknet, private_key).await;
+        let gas_tank_deployment = DeployArgentAccount::initialize(starknet, private_key).await;
         // Fund the gas tank with the amount of STRK specified in the parameters (1 STRK will be used as reserve)
         let transfer_call = Transfer {
             token: Token::STRK_ADDRESS,

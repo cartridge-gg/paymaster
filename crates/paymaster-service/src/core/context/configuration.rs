@@ -175,16 +175,12 @@ mod tests {
         let mut profile = Profile::empty();
 
         let value = Value::String("42".to_string());
-        profile.insert_variable(JSONPath::from_str("foo_1"), value.clone()).unwrap();
-        profile.insert_variable(JSONPath::from_str("foo_2"), value.clone()).unwrap();
+        profile.insert_variable(JSONPath::parse("foo_1"), value.clone()).unwrap();
+        profile.insert_variable(JSONPath::parse("foo_2"), value.clone()).unwrap();
+        profile.insert_variable(JSONPath::parse("foo_3.foo_1"), value.clone()).unwrap();
+        profile.insert_variable(JSONPath::parse("foo_3.foo_2"), value.clone()).unwrap();
         profile
-            .insert_variable(JSONPath::from_str("foo_3.foo_1"), value.clone())
-            .unwrap();
-        profile
-            .insert_variable(JSONPath::from_str("foo_3.foo_2"), value.clone())
-            .unwrap();
-        profile
-            .insert_variable(JSONPath::from_str("foo_3.foo_3.foo_1"), value.clone())
+            .insert_variable(JSONPath::parse("foo_3.foo_3.foo_1"), value.clone())
             .unwrap();
 
         assert_eq!(profile.0, expected);
