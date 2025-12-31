@@ -21,6 +21,12 @@ pub enum ExecutableTransactionParameters {
         deployment: DeploymentParameters,
         invoke: ExecutableInvokeParameters,
     },
+    RawInvoke {
+        user: Felt,
+        execute_from_outside_call: Call,
+        gas_token: Option<Felt>,
+        max_gas_token_amount: Option<Felt>,
+    },
 }
 
 impl ExecutableTransactionParameters {
@@ -29,6 +35,14 @@ impl ExecutableTransactionParameters {
             ExecutableTransactionParameters::Deploy { deployment } => deployment.get_unique_identifier(),
             ExecutableTransactionParameters::Invoke { invoke } => invoke.get_unique_identifier(),
             ExecutableTransactionParameters::DeployAndInvoke { invoke, .. } => invoke.get_unique_identifier(),
+            ExecutableTransactionParameters::RawInvoke {
+                user, execute_from_outside_call, ..
+            } => {
+                let mut hasher = DefaultHasher::new();
+                user.hash(&mut hasher);
+                execute_from_outside_call.calldata.hash(&mut hasher);
+                hasher.finish()
+            },
         }
     }
 }
@@ -108,45 +122,55 @@ impl ExecutableTransaction {
         Ok(EstimatedExecutableTransaction(estimated_final_calls))
     }
 
-    /// Estimate an unsponsored transaction which is a transaction that will be paid by the user
     pub async fn estimate_transaction(self, client: &Client) -> Result<EstimatedExecutableTransaction, Error> {
-        let gas_token_transfer = match &self.transaction {
-            ExecutableTransactionParameters::Invoke { invoke, .. } => invoke.find_gas_token_transfer(self.forwarder)?,
-            ExecutableTransactionParameters::DeployAndInvoke { invoke, .. } => invoke.find_gas_token_transfer(self.forwarder)?,
+        let (gas_token, max_gas_token_amount) = match &self.transaction {
+            ExecutableTransactionParameters::Invoke { invoke, .. } => {
+                let transfer = invoke.find_gas_token_transfer(self.forwarder)?;
+                (transfer.token(), transfer.amount())
+            },
+            ExecutableTransactionParameters::DeployAndInvoke { invoke, .. } => {
+                let transfer = invoke.find_gas_token_transfer(self.forwarder)?;
+                (transfer.token(), transfer.amount())
+            },
+            ExecutableTransactionParameters::RawInvoke {
+                gas_token, max_gas_token_amount, ..
+            } => {
+                let token = gas_token.ok_or(Error::InvalidTypedData)?;
+                let amount = max_gas_token_amount.ok_or(Error::InvalidTypedData)?;
+                (token, amount)
+            },
             _ => return Err(Error::InvalidTypedData),
         };
 
-        let calls = self.build_calls(gas_token_transfer);
+        let placeholder_transfer = TokenTransfer::new(gas_token, self.forwarder, max_gas_token_amount);
+        let calls = self.build_calls(placeholder_transfer);
 
         let estimated_calls = client.estimate(&calls, self.parameters.tip()).await?;
         let fee_estimate = estimated_calls.estimate();
 
-        // We recompute the real estimate fee. Validation step is not included in the fee estimate
         let paid_fee_in_strk = self.compute_paid_fee(client, Felt::from(fee_estimate.overall_fee)).await?;
         let final_fee_estimate = fee_estimate.update_overall_fee(paid_fee_in_strk);
 
-        let token_price = client.price.fetch_token(gas_token_transfer.token()).await?;
+        let token_price = client.price.fetch_token(gas_token).await?;
         let paid_fee_in_token = convert_strk_to_token(&token_price, paid_fee_in_strk, true)?;
 
-        // Check that the user has approved enough token to cover the real cost. The value approved by the user
-        // is extracted from the signed execute from outside message.
-        if paid_fee_in_token > gas_token_transfer.amount() {
+        if paid_fee_in_token > max_gas_token_amount {
             return Err(Error::MaxAmountTooLow(paid_fee_in_token.to_hex_string()));
         }
 
-        let fee_transfer = TokenTransfer::new(gas_token_transfer.token(), self.gas_tank_address, paid_fee_in_token);
+        let fee_transfer = TokenTransfer::new(gas_token, self.gas_tank_address, paid_fee_in_token);
         let final_calls = self.build_calls(fee_transfer);
         let estimated_final_calls = final_calls.with_estimate(final_fee_estimate);
 
         Ok(EstimatedExecutableTransaction(estimated_final_calls))
     }
 
-    // Compute the fee that will be paid upon execution
     async fn compute_paid_fee(&self, client: &Client, base_estimate: Felt) -> Result<Felt, Error> {
         match &self.transaction {
             ExecutableTransactionParameters::Deploy { .. } => Ok(client.compute_paid_fee_in_strk(base_estimate)),
             ExecutableTransactionParameters::Invoke { invoke, .. } => client.compute_paid_fee_with_overhead_in_strk(invoke.user, base_estimate).await,
             ExecutableTransactionParameters::DeployAndInvoke { invoke, .. } => client.compute_paid_fee_with_overhead_in_strk(invoke.user, base_estimate).await,
+            ExecutableTransactionParameters::RawInvoke { user, .. } => client.compute_paid_fee_with_overhead_in_strk(*user, base_estimate).await,
         }
     }
 
@@ -179,13 +203,12 @@ impl ExecutableTransaction {
     }
 
     fn build_execute_call(&self, fee_transfer: TokenTransfer) -> Option<Call> {
-        let invoke = match &self.transaction {
-            ExecutableTransactionParameters::Invoke { invoke, .. } => invoke,
-            ExecutableTransactionParameters::DeployAndInvoke { invoke, .. } => invoke,
+        let execute_from_outside_call = match &self.transaction {
+            ExecutableTransactionParameters::Invoke { invoke, .. } => invoke.message.to_call(invoke.user, &invoke.signature),
+            ExecutableTransactionParameters::DeployAndInvoke { invoke, .. } => invoke.message.to_call(invoke.user, &invoke.signature),
+            ExecutableTransactionParameters::RawInvoke { execute_from_outside_call, .. } => execute_from_outside_call.clone(),
             _ => return None,
         };
-
-        let execute_from_outside_call = invoke.message.to_call(invoke.user, &invoke.signature);
 
         Some(Call {
             to: self.forwarder,
@@ -200,13 +223,12 @@ impl ExecutableTransaction {
     }
 
     fn build_sponsored_execute_call(&self, sponsor_metadata: Vec<Felt>) -> Option<Call> {
-        let invoke = match &self.transaction {
-            ExecutableTransactionParameters::Invoke { invoke, .. } => invoke,
-            ExecutableTransactionParameters::DeployAndInvoke { invoke, .. } => invoke,
+        let execute_from_outside_call = match &self.transaction {
+            ExecutableTransactionParameters::Invoke { invoke, .. } => invoke.message.to_call(invoke.user, &invoke.signature),
+            ExecutableTransactionParameters::DeployAndInvoke { invoke, .. } => invoke.message.to_call(invoke.user, &invoke.signature),
+            ExecutableTransactionParameters::RawInvoke { execute_from_outside_call, .. } => execute_from_outside_call.clone(),
             _ => return None,
         };
-
-        let execute_from_outside_call = invoke.message.to_call(invoke.user, &invoke.signature);
 
         Some(Call {
             to: self.forwarder,
