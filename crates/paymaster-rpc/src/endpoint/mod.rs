@@ -12,6 +12,7 @@ use crate::Error;
 pub mod build;
 pub mod common;
 pub mod execute;
+pub mod execute_raw;
 pub mod health;
 pub mod token;
 mod validation;
