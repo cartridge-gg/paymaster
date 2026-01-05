@@ -33,7 +33,7 @@ Install using [asdf](https://asdf-vm.com/) version manager:
 
 ```bash
 # Add the plugin
-asdf plugin add paymaster https://github.com/cartridge-gg/paymaster.git asdf/
+asdf plugin add paymaster https://github.com/cartridge-gg/paymaster.git
 
 # Install a version
 asdf install paymaster 1.0.0
