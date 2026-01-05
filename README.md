@@ -27,10 +27,35 @@ Empower your application with a SNIP‑29 compliant Paymaster.
 
 ## 📦 Installation
 
+### asdf (Recommended)
+
+Install using [asdf](https://asdf-vm.com/) version manager:
+
+```bash
+# Add the plugin
+asdf plugin add paymaster https://github.com/cartridge-gg/paymaster.git
+
+# Install a version
+asdf install paymaster 1.0.0
+
+# Set it globally (or use .tool-versions file)
+asdf global paymaster 1.0.0
+
+# Both binaries are now available
+paymaster-cli --version
+paymaster-service --version
+```
+
+### GitHub Releases
+
+Download pre-built binaries from [GitHub Releases](https://github.com/cartridge-gg/paymaster/releases).
+
+Available for: Linux (x86_64, aarch64), macOS (x86_64, aarch64), Windows (x86_64).
+
 ### Rust Binary
 
 ```bash
-git clone https://github.com/avnu-labs/paymaster
+git clone https://github.com/cartridge-gg/paymaster
 cd paymaster
 cargo build --release --bin paymaster-service
 ```
