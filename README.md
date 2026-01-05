@@ -36,14 +36,14 @@ Install using [asdf](https://asdf-vm.com/) version manager:
 asdf plugin add paymaster https://github.com/cartridge-gg/paymaster.git
 
 # Install a version
-asdf install paymaster 1.0.0
+asdf install paymaster latest
 
 # Set it globally (or use .tool-versions file)
-asdf global paymaster 1.0.0
+asdf set paymaster latest
 
 # Both binaries are now available
-paymaster-cli --version
-paymaster-service --version
+paymaster-cli --help
+paymaster-service
 ```
 
 ### GitHub Releases
