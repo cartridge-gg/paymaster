@@ -24,8 +24,6 @@ pub enum ExecutableTransactionParameters {
     RawInvoke {
         user: Felt,
         execute_from_outside_call: Call,
-        gas_token: Option<Felt>,
-        max_gas_token_amount: Option<Felt>,
     },
 }
 

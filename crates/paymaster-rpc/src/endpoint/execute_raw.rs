@@ -29,8 +29,6 @@ impl TryFrom<ExecuteRawTransactionParameters> for paymaster_execution::Executabl
             ExecuteRawTransactionParameters::RawInvoke { invoke } => Self::RawInvoke {
                 user: invoke.user_address,
                 execute_from_outside_call: invoke.execute_from_outside_call,
-                gas_token: None,            // Will be extracted from the call
-                max_gas_token_amount: None, // Will be extracted from the call
             },
         })
     }
