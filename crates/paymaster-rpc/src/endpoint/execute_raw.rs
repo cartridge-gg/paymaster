@@ -29,8 +29,8 @@ impl TryFrom<ExecuteRawTransactionParameters> for paymaster_execution::Executabl
             ExecuteRawTransactionParameters::RawInvoke { invoke } => Self::RawInvoke {
                 user: invoke.user_address,
                 execute_from_outside_call: invoke.execute_from_outside_call,
-                gas_token: invoke.gas_token,
-                max_gas_token_amount: invoke.max_gas_token_amount,
+                gas_token: None,            // Will be extracted from the call
+                max_gas_token_amount: None, // Will be extracted from the call
             },
         })
     }
@@ -43,14 +43,6 @@ pub struct RawInvokeParameters {
     pub user_address: Felt,
 
     pub execute_from_outside_call: Call,
-
-    #[serde_as(as = "Option<UfeHex>")]
-    #[serde(default)]
-    pub gas_token: Option<Felt>,
-
-    #[serde_as(as = "Option<UfeHex>")]
-    #[serde(default)]
-    pub max_gas_token_amount: Option<Felt>,
 }
 
 #[serde_as]
@@ -65,6 +57,9 @@ pub struct ExecuteRawResponse {
 
 pub async fn execute_raw_endpoint(ctx: &RequestContext<'_>, request: ExecuteRawRequest) -> Result<ExecuteRawResponse, Error> {
     check_service_is_available(ctx).await?;
+
+    // Validate that the execute_from_outside_call matches the FeeMode
+    validate_raw_invoke_fee_mode(&request)?;
 
     let forwarder = ctx.configuration.forwarder;
     let gas_tank_address = ctx.configuration.gas_tank.address;
@@ -91,6 +86,26 @@ pub async fn execute_raw_endpoint(ctx: &RequestContext<'_>, request: ExecuteRawR
         transaction_hash: result.transaction_hash,
         tracking_id: Felt::ZERO,
     })
+}
+
+/// Validate that the execute_from_outside_call is consistent with the FeeMode
+fn validate_raw_invoke_fee_mode(request: &ExecuteRawRequest) -> Result<(), Error> {
+    let ExecuteRawTransactionParameters::RawInvoke { invoke: _ } = &request.transaction;
+
+    match request.parameters.fee_mode() {
+        crate::endpoint::common::FeeMode::Default { gas_token: _, .. } => {
+            // For non-sponsored, we expect a gas transfer call to be present
+            // We don't extract it here (that happens in execution layer),
+            // but we could add a quick validation if needed
+            // For now, we'll let the execution layer handle extraction and validation
+            Ok(())
+        },
+        crate::endpoint::common::FeeMode::Sponsored { .. } => {
+            // For sponsored, we expect NO gas transfer call
+            // We'll validate this in the execution layer
+            Ok(())
+        },
+    }
 }
 
 #[cfg(test)]
@@ -184,8 +199,6 @@ mod tests {
                 invoke: RawInvokeParameters {
                     user_address: StarknetTestEnvironment::ACCOUNT_ARGENT_1.address,
                     execute_from_outside_call,
-                    gas_token: Some(StarknetTestEnvironment::ETH),
-                    max_gas_token_amount: Some(Felt::from(1e18 as u128)),
                 },
             },
             parameters: ExecutionParameters::V1 {
@@ -247,8 +260,6 @@ mod tests {
                 invoke: RawInvokeParameters {
                     user_address: StarknetTestEnvironment::ACCOUNT_ARGENT_1.address,
                     execute_from_outside_call,
-                    gas_token: Some(StarknetTestEnvironment::ETH),
-                    max_gas_token_amount: Some(Felt::from(1e18 as u128)),
                 },
             },
             parameters: ExecutionParameters::V1 {

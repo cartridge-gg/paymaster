@@ -107,6 +107,101 @@ pub struct ExecutableTransaction {
 }
 
 impl ExecutableTransaction {
+    /// Extract gas transfer from a raw execute_from_outside call
+    ///
+    /// The execute_from_outside_call has calldata structure:
+    /// [caller, nonce, execute_after, execute_before, calls_array...]
+    /// where calls_array is [num_calls, ...encoded_calls]
+    /// and each call is [to, selector, calldata_len, ...calldata]
+    fn extract_gas_transfer_from_raw_call(call: &Call, forwarder: Felt) -> Result<TokenTransfer, Error> {
+        let calldata = &call.calldata;
+
+        // Skip: caller (1), nonce (1), execute_after (1), execute_before (1) = 4 felts
+        if calldata.len() < 5 {
+            return Err(Error::InvalidTypedData);
+        }
+
+        let num_calls_idx = 4;
+        let num_calls: usize = calldata[num_calls_idx].try_into().map_err(|_| Error::InvalidTypedData)?;
+
+        if num_calls == 0 {
+            return Err(Error::InvalidTypedData);
+        }
+
+        // Parse all calls to find the last one
+        let mut idx = num_calls_idx + 1;
+        let mut last_call_info: Option<(Felt, Felt, Felt)> = None; // (to, selector, amount)
+
+        for _ in 0..num_calls {
+            if idx + 2 >= calldata.len() {
+                return Err(Error::InvalidTypedData);
+            }
+
+            let to = calldata[idx];
+            let selector_val = calldata[idx + 1];
+            let calldata_len: usize = calldata[idx + 2].try_into().map_err(|_| Error::InvalidTypedData)?;
+
+            idx += 3;
+
+            if idx + calldata_len > calldata.len() {
+                return Err(Error::InvalidTypedData);
+            }
+
+            // Extract amount if this is the call (it's in calldata[1] for transfer)
+            let amount = if calldata_len >= 2 { calldata[idx + 1] } else { Felt::ZERO };
+
+            last_call_info = Some((to, selector_val, amount));
+            idx += calldata_len;
+        }
+
+        // Validate the last call is a transfer to the forwarder
+        let (_token, selector_val, _amount) = last_call_info.ok_or(Error::InvalidTypedData)?;
+
+        if selector_val != selector!("transfer") {
+            return Err(Error::InvalidTypedData);
+        }
+
+        // The first calldata element should be the recipient (forwarder)
+        // We need to re-parse the last call to get the recipient
+        // Actually, let's decode it properly by going back
+
+        // Re-parse to get the recipient from the last call's calldata
+        let mut idx = num_calls_idx + 1;
+        let mut last_call_recipient = Felt::ZERO;
+        let mut last_call_amount = Felt::ZERO;
+        let mut last_call_token = Felt::ZERO;
+
+        for i in 0..num_calls {
+            if idx + 2 >= calldata.len() {
+                return Err(Error::InvalidTypedData)?;
+            }
+
+            let to = calldata[idx];
+            let calldata_len: usize = calldata[idx + 2].try_into().map_err(|_| Error::InvalidTypedData)?;
+
+            idx += 3;
+
+            if idx + calldata_len > calldata.len() {
+                return Err(Error::InvalidTypedData)?;
+            }
+
+            // If this is the last call, extract recipient and amount
+            if i == num_calls - 1 && calldata_len >= 2 {
+                last_call_recipient = calldata[idx];
+                last_call_amount = calldata[idx + 1];
+                last_call_token = to;
+            }
+
+            idx += calldata_len;
+        }
+
+        if last_call_recipient != forwarder {
+            return Err(Error::InvalidTypedData);
+        }
+
+        Ok(TokenTransfer::new(last_call_token, forwarder, last_call_amount))
+    }
+
     /// Estimate a sponsored transaction which is a transaction that will be paid by the relayer
     pub async fn estimate_sponsored_transaction(self, client: &Client, sponsor_metadata: Vec<Felt>) -> Result<EstimatedExecutableTransaction, Error> {
         let calls = self.build_sponsored_calls(sponsor_metadata);
@@ -132,12 +227,10 @@ impl ExecutableTransaction {
                 let transfer = invoke.find_gas_token_transfer(self.forwarder)?;
                 (transfer.token(), transfer.amount())
             },
-            ExecutableTransactionParameters::RawInvoke {
-                gas_token, max_gas_token_amount, ..
-            } => {
-                let token = gas_token.ok_or(Error::InvalidTypedData)?;
-                let amount = max_gas_token_amount.ok_or(Error::InvalidTypedData)?;
-                (token, amount)
+            ExecutableTransactionParameters::RawInvoke { execute_from_outside_call, .. } => {
+                // Extract the gas transfer from the execute_from_outside_call
+                let transfer = Self::extract_gas_transfer_from_raw_call(execute_from_outside_call, self.forwarder)?;
+                (transfer.token(), transfer.amount())
             },
             _ => return Err(Error::InvalidTypedData),
         };
