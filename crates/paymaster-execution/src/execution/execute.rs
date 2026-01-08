@@ -113,6 +113,8 @@ impl ExecutableTransaction {
     /// [caller, nonce, execute_after, execute_before, calls_array...]
     /// where calls_array is [num_calls, ...encoded_calls]
     /// and each call is [to, selector, calldata_len, ...calldata]
+    ///
+    /// For non-sponsored transactions, the last call should be a transfer of gas token to the forwarder.
     fn extract_gas_transfer_from_raw_call(call: &Call, forwarder: Felt) -> Result<TokenTransfer, Error> {
         let calldata = &call.calldata;
 
@@ -128,71 +130,48 @@ impl ExecutableTransaction {
             return Err(Error::InvalidTypedData);
         }
 
-        // Parse all calls to find the last one
+        // Parse all calls to find the last one and extract its details
         let mut idx = num_calls_idx + 1;
-        let mut last_call_info: Option<(Felt, Felt, Felt)> = None; // (to, selector, amount)
-
-        for _ in 0..num_calls {
-            if idx + 2 >= calldata.len() {
-                return Err(Error::InvalidTypedData);
-            }
-
-            let to = calldata[idx];
-            let selector_val = calldata[idx + 1];
-            let calldata_len: usize = calldata[idx + 2].try_into().map_err(|_| Error::InvalidTypedData)?;
-
-            idx += 3;
-
-            if idx + calldata_len > calldata.len() {
-                return Err(Error::InvalidTypedData);
-            }
-
-            // Extract amount if this is the call (it's in calldata[1] for transfer)
-            let amount = if calldata_len >= 2 { calldata[idx + 1] } else { Felt::ZERO };
-
-            last_call_info = Some((to, selector_val, amount));
-            idx += calldata_len;
-        }
-
-        // Validate the last call is a transfer to the forwarder
-        let (_token, selector_val, _amount) = last_call_info.ok_or(Error::InvalidTypedData)?;
-
-        if selector_val != selector!("transfer") {
-            return Err(Error::InvalidTypedData);
-        }
-
-        // The first calldata element should be the recipient (forwarder)
-        // We need to re-parse the last call to get the recipient
-        // Actually, let's decode it properly by going back
-
-        // Re-parse to get the recipient from the last call's calldata
-        let mut idx = num_calls_idx + 1;
+        let mut last_call_token = Felt::ZERO;
+        let mut last_call_selector = Felt::ZERO;
         let mut last_call_recipient = Felt::ZERO;
         let mut last_call_amount = Felt::ZERO;
-        let mut last_call_token = Felt::ZERO;
 
         for i in 0..num_calls {
             if idx + 2 >= calldata.len() {
-                return Err(Error::InvalidTypedData)?;
+                return Err(Error::InvalidTypedData);
             }
 
             let to = calldata[idx];
-            let calldata_len: usize = calldata[idx + 2].try_into().map_err(|_| Error::InvalidTypedData)?;
+            let selector = calldata[idx + 1];
+            let call_calldata_len: usize = calldata[idx + 2].try_into().map_err(|_| Error::InvalidTypedData)?;
 
             idx += 3;
 
-            if idx + calldata_len > calldata.len() {
-                return Err(Error::InvalidTypedData)?;
+            if idx + call_calldata_len > calldata.len() {
+                return Err(Error::InvalidTypedData);
             }
 
-            // If this is the last call, extract recipient and amount
-            if i == num_calls - 1 && calldata_len >= 2 {
+            // If this is the last call, extract all the details we need
+            if i == num_calls - 1 {
+                // For a transfer call, calldata should be [recipient, amount_low, amount_high]
+                // We need at least recipient and amount_low
+                if call_calldata_len < 2 {
+                    return Err(Error::InvalidTypedData);
+                }
+
+                last_call_token = to;
+                last_call_selector = selector;
                 last_call_recipient = calldata[idx];
                 last_call_amount = calldata[idx + 1];
-                last_call_token = to;
             }
 
-            idx += calldata_len;
+            idx += call_calldata_len;
+        }
+
+        // Validate the last call is a transfer to the forwarder
+        if last_call_selector != selector!("transfer") {
+            return Err(Error::InvalidTypedData);
         }
 
         if last_call_recipient != forwarder {
@@ -351,7 +330,8 @@ mod tests {
     use paymaster_starknet::transaction::{Calls, TokenTransfer};
     use rand::Rng;
     use starknet::accounts::{Account, AccountFactory};
-    use starknet::core::types::Felt;
+    use starknet::core::types::{Call, Felt};
+    use starknet::macros::{felt, selector};
     use starknet::signers::SigningKey;
 
     use crate::execution::build::{InvokeParameters, Transaction, TransactionParameters};
@@ -360,6 +340,149 @@ mod tests {
     use crate::execution::{ExecutionParameters, FeeMode, TipPriority};
     use crate::testing::transaction::{an_eth_approve, an_eth_transfer};
     use crate::testing::{StarknetTestEnvironment, TestEnvironment};
+
+    #[test]
+    fn extract_gas_transfer_from_raw_call_works() {
+        let forwarder = felt!("0x123");
+        let token = felt!("0x456");
+        let amount = felt!("0x789");
+
+        // Build a simple execute_from_outside call with one user call + gas transfer
+        // Structure: [caller, nonce, execute_after, execute_before, num_calls, call1..., call2...]
+        let calldata = vec![
+            felt!("0x1"), // caller
+            felt!("0x2"), // nonce
+            felt!("0x3"), // execute_after
+            felt!("0x4"), // execute_before
+            Felt::TWO,    // num_calls = 2
+            // First call (user's transfer)
+            felt!("0xAAA"),        // to
+            selector!("transfer"), // selector
+            Felt::TWO,             // calldata_len
+            felt!("0xBBB"),        // recipient
+            felt!("0xCCC"),        // amount
+            // Second call (gas transfer to forwarder)
+            token,                 // to (token address)
+            selector!("transfer"), // selector
+            Felt::TWO,             // calldata_len
+            forwarder,             // recipient (forwarder)
+            amount,                // amount
+        ];
+
+        let call = Call {
+            to: felt!("0x999"),
+            selector: selector!("execute_from_outside"),
+            calldata,
+        };
+
+        let result = ExecutableTransaction::extract_gas_transfer_from_raw_call(&call, forwarder);
+        assert!(result.is_ok());
+
+        let transfer = result.unwrap();
+        assert_eq!(transfer.token(), token);
+        assert_eq!(transfer.recipient(), forwarder);
+        assert_eq!(transfer.amount(), amount);
+    }
+
+    #[test]
+    fn extract_gas_transfer_fails_when_last_call_not_transfer() {
+        let forwarder = felt!("0x123");
+
+        let calldata = vec![
+            felt!("0x1"), // caller
+            felt!("0x2"), // nonce
+            felt!("0x3"), // execute_after
+            felt!("0x4"), // execute_before
+            Felt::ONE,    // num_calls = 1
+            // Call with wrong selector
+            felt!("0x456"),        // to
+            selector!("approve"),  // wrong selector
+            Felt::TWO,             // calldata_len
+            forwarder,             // recipient
+            felt!("0x789"),        // amount
+        ];
+
+        let call = Call {
+            to: felt!("0x999"),
+            selector: selector!("execute_from_outside"),
+            calldata,
+        };
+
+        let result = ExecutableTransaction::extract_gas_transfer_from_raw_call(&call, forwarder);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn extract_gas_transfer_fails_when_recipient_not_forwarder() {
+        let forwarder = felt!("0x123");
+        let wrong_recipient = felt!("0x456");
+
+        let calldata = vec![
+            felt!("0x1"), // caller
+            felt!("0x2"), // nonce
+            felt!("0x3"), // execute_after
+            felt!("0x4"), // execute_before
+            Felt::ONE,    // num_calls = 1
+            // Transfer to wrong recipient
+            felt!("0x789"),        // to
+            selector!("transfer"), // selector
+            Felt::TWO,             // calldata_len
+            wrong_recipient,       // wrong recipient
+            felt!("0xAAA"),        // amount
+        ];
+
+        let call = Call {
+            to: felt!("0x999"),
+            selector: selector!("execute_from_outside"),
+            calldata,
+        };
+
+        let result = ExecutableTransaction::extract_gas_transfer_from_raw_call(&call, forwarder);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn extract_gas_transfer_fails_when_no_calls() {
+        let forwarder = felt!("0x123");
+
+        let calldata = vec![
+            felt!("0x1"), // caller
+            felt!("0x2"), // nonce
+            felt!("0x3"), // execute_after
+            felt!("0x4"), // execute_before
+            Felt::ZERO,   // num_calls = 0
+        ];
+
+        let call = Call {
+            to: felt!("0x999"),
+            selector: selector!("execute_from_outside"),
+            calldata,
+        };
+
+        let result = ExecutableTransaction::extract_gas_transfer_from_raw_call(&call, forwarder);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn extract_gas_transfer_fails_when_insufficient_calldata() {
+        let forwarder = felt!("0x123");
+
+        // Not enough data
+        let calldata = vec![
+            felt!("0x1"), // caller
+            felt!("0x2"), // nonce
+            felt!("0x3"), // execute_after
+        ];
+
+        let call = Call {
+            to: felt!("0x999"),
+            selector: selector!("execute_from_outside"),
+            calldata,
+        };
+
+        let result = ExecutableTransaction::extract_gas_transfer_from_raw_call(&call, forwarder);
+        assert!(result.is_err());
+    }
 
     // TODO: enable when we can fix starknet image
     #[ignore]
