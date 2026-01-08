@@ -128,49 +128,28 @@ impl ExecutableTransaction {
             return Err(Error::InvalidTypedData);
         }
 
-        // Parse calls to find where the last one starts and extract its details
-        // We need to iterate because each call has variable-length calldata
-        let mut idx = num_calls_idx + 1;
-        let mut last_call_token = Felt::ZERO;
-        let mut last_call_selector = Felt::ZERO;
-        let mut last_call_recipient = Felt::ZERO;
-        let mut last_call_amount = Felt::ZERO;
+        // Extract the last call directly from the end of calldata
+        // A transfer call is always: [to, selector, calldata_len(=2), recipient, amount]
+        // That's exactly 5 felts at the end of the calls array
+        const TRANSFER_CALL_SIZE: usize = 5;
 
-        for i in 0..num_calls {
-            if idx + 2 >= calldata.len() {
-                return Err(Error::InvalidTypedData);
-            }
-
-            let to = calldata[idx];
-            let selector = calldata[idx + 1];
-            let call_calldata_len: usize = calldata[idx + 2].try_into().map_err(|_| Error::InvalidTypedData)?;
-
-            idx += 3;
-
-            if idx + call_calldata_len > calldata.len() {
-                return Err(Error::InvalidTypedData);
-            }
-
-            // If this is the last call, extract all the details we need and we're done
-            if i == num_calls - 1 {
-                // For a transfer call, calldata should be [recipient, amount_low, amount_high]
-                // We need at least recipient and amount_low
-                if call_calldata_len < 2 {
-                    return Err(Error::InvalidTypedData);
-                }
-
-                last_call_token = to;
-                last_call_selector = selector;
-                last_call_recipient = calldata[idx];
-                last_call_amount = calldata[idx + 1];
-                break;
-            }
-
-            idx += call_calldata_len;
+        if calldata.len() < num_calls_idx + 1 + TRANSFER_CALL_SIZE {
+            return Err(Error::InvalidTypedData);
         }
+
+        let last_call_start = calldata.len() - TRANSFER_CALL_SIZE;
+        let last_call_token = calldata[last_call_start];
+        let last_call_selector = calldata[last_call_start + 1];
+        let last_call_calldata_len = calldata[last_call_start + 2];
+        let last_call_recipient = calldata[last_call_start + 3];
+        let last_call_amount = calldata[last_call_start + 4];
 
         // Validate the last call is a transfer to the forwarder
         if last_call_selector != selector!("transfer") {
+            return Err(Error::InvalidTypedData);
+        }
+
+        if last_call_calldata_len != Felt::TWO {
             return Err(Error::InvalidTypedData);
         }
 
