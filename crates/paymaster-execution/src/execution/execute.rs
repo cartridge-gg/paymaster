@@ -395,11 +395,11 @@ mod tests {
             felt!("0x4"), // execute_before
             Felt::ONE,    // num_calls = 1
             // Call with wrong selector
-            felt!("0x456"),        // to
-            selector!("approve"),  // wrong selector
-            Felt::TWO,             // calldata_len
-            forwarder,             // recipient
-            felt!("0x789"),        // amount
+            felt!("0x456"),       // to
+            selector!("approve"), // wrong selector
+            Felt::TWO,            // calldata_len
+            forwarder,            // recipient
+            felt!("0x789"),       // amount
         ];
 
         let call = Call {
