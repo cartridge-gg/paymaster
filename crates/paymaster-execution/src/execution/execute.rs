@@ -128,7 +128,8 @@ impl ExecutableTransaction {
             return Err(Error::InvalidTypedData);
         }
 
-        // Parse all calls to find the last one and extract its details
+        // Parse calls to find where the last one starts and extract its details
+        // We need to iterate because each call has variable-length calldata
         let mut idx = num_calls_idx + 1;
         let mut last_call_token = Felt::ZERO;
         let mut last_call_selector = Felt::ZERO;
@@ -150,7 +151,7 @@ impl ExecutableTransaction {
                 return Err(Error::InvalidTypedData);
             }
 
-            // If this is the last call, extract all the details we need
+            // If this is the last call, extract all the details we need and we're done
             if i == num_calls - 1 {
                 // For a transfer call, calldata should be [recipient, amount_low, amount_high]
                 // We need at least recipient and amount_low
@@ -162,6 +163,7 @@ impl ExecutableTransaction {
                 last_call_selector = selector;
                 last_call_recipient = calldata[idx];
                 last_call_amount = calldata[idx + 1];
+                break;
             }
 
             idx += call_calldata_len;
