@@ -129,9 +129,9 @@ impl ExecutableTransaction {
         }
 
         // Extract the last call directly from the end of calldata
-        // A transfer call is always: [to, selector, calldata_len(=2), recipient, amount]
-        // That's exactly 5 felts at the end of the calls array
-        const TRANSFER_CALL_SIZE: usize = 5;
+        // A transfer call is always: [to, selector, calldata_len(=3), recipient, amount_low, amount_high]
+        // That's exactly 6 felts at the end of the calls array
+        const TRANSFER_CALL_SIZE: usize = 6;
 
         if calldata.len() < num_calls_idx + 1 + TRANSFER_CALL_SIZE {
             return Err(Error::InvalidTypedData);
@@ -142,14 +142,14 @@ impl ExecutableTransaction {
         let last_call_selector = calldata[last_call_start + 1];
         let last_call_calldata_len = calldata[last_call_start + 2];
         let last_call_recipient = calldata[last_call_start + 3];
-        let last_call_amount = calldata[last_call_start + 4];
+        let last_call_amount = calldata[last_call_start + 4]; // amount_low
 
         // Validate the last call is a transfer to the forwarder
         if last_call_selector != selector!("transfer") {
             return Err(Error::InvalidTypedData);
         }
 
-        if last_call_calldata_len != Felt::TWO {
+        if last_call_calldata_len != Felt::THREE {
             return Err(Error::InvalidTypedData);
         }
 
@@ -337,15 +337,17 @@ mod tests {
             // First call (user's transfer)
             felt!("0xAAA"),        // to
             selector!("transfer"), // selector
-            Felt::TWO,             // calldata_len
+            Felt::THREE,           // calldata_len
             felt!("0xBBB"),        // recipient
-            felt!("0xCCC"),        // amount
+            felt!("0xCCC"),        // amount_low
+            Felt::ZERO,            // amount_high
             // Second call (gas transfer to forwarder)
             token,                 // to (token address)
             selector!("transfer"), // selector
-            Felt::TWO,             // calldata_len
+            Felt::THREE,           // calldata_len
             forwarder,             // recipient (forwarder)
-            amount,                // amount
+            amount,                // amount_low
+            Felt::ZERO,            // amount_high
         ];
 
         let call = Call {
@@ -376,9 +378,10 @@ mod tests {
             // Call with wrong selector
             felt!("0x456"),       // to
             selector!("approve"), // wrong selector
-            Felt::TWO,            // calldata_len
+            Felt::THREE,          // calldata_len
             forwarder,            // recipient
-            felt!("0x789"),       // amount
+            felt!("0x789"),       // amount_low
+            Felt::ZERO,           // amount_high
         ];
 
         let call = Call {
@@ -405,9 +408,10 @@ mod tests {
             // Transfer to wrong recipient
             felt!("0x789"),        // to
             selector!("transfer"), // selector
-            Felt::TWO,             // calldata_len
+            Felt::THREE,           // calldata_len
             wrong_recipient,       // wrong recipient
-            felt!("0xAAA"),        // amount
+            felt!("0xAAA"),        // amount_low
+            Felt::ZERO,            // amount_high
         ];
 
         let call = Call {
