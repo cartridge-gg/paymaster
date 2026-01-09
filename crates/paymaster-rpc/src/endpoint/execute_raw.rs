@@ -29,8 +29,6 @@ impl TryFrom<ExecuteRawTransactionParameters> for paymaster_execution::Executabl
             ExecuteRawTransactionParameters::RawInvoke { invoke } => Self::RawInvoke {
                 user: invoke.user_address,
                 execute_from_outside_call: invoke.execute_from_outside_call,
-                gas_token: invoke.gas_token,
-                max_gas_token_amount: invoke.max_gas_token_amount,
             },
         })
     }
@@ -43,14 +41,6 @@ pub struct RawInvokeParameters {
     pub user_address: Felt,
 
     pub execute_from_outside_call: Call,
-
-    #[serde_as(as = "Option<UfeHex>")]
-    #[serde(default)]
-    pub gas_token: Option<Felt>,
-
-    #[serde_as(as = "Option<UfeHex>")]
-    #[serde(default)]
-    pub max_gas_token_amount: Option<Felt>,
 }
 
 #[serde_as]
@@ -184,8 +174,6 @@ mod tests {
                 invoke: RawInvokeParameters {
                     user_address: StarknetTestEnvironment::ACCOUNT_ARGENT_1.address,
                     execute_from_outside_call,
-                    gas_token: Some(StarknetTestEnvironment::ETH),
-                    max_gas_token_amount: Some(Felt::from(1e18 as u128)),
                 },
             },
             parameters: ExecutionParameters::V1 {
@@ -247,8 +235,6 @@ mod tests {
                 invoke: RawInvokeParameters {
                     user_address: StarknetTestEnvironment::ACCOUNT_ARGENT_1.address,
                     execute_from_outside_call,
-                    gas_token: Some(StarknetTestEnvironment::ETH),
-                    max_gas_token_amount: Some(Felt::from(1e18 as u128)),
                 },
             },
             parameters: ExecutionParameters::V1 {
