@@ -16,10 +16,7 @@ use crate::endpoint::health::is_available_endpoint;
 use crate::endpoint::token::get_supported_tokens_endpoint;
 use crate::endpoint::RequestContext;
 use crate::middleware::{AuthenticationLayer, PayloadFormatter};
-use crate::{
-    BuildTransactionRequest, BuildTransactionResponse, Configuration, Error, ExecuteRequest, ExecuteResponse, PaymasterAPIServer,
-    TokenPrice,
-};
+use crate::{BuildTransactionRequest, BuildTransactionResponse, Configuration, Error, ExecuteRequest, ExecuteResponse, PaymasterAPIServer, TokenPrice};
 
 #[macro_export]
 macro_rules! log_if_error {

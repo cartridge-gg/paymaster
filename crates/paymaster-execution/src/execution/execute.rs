@@ -1,5 +1,5 @@
 use paymaster_prices::math::convert_strk_to_token;
-use paymaster_starknet::transaction::{CalldataBuilder, SequentialCalldataDecoder, Calls, EstimatedCalls, ExecuteFromOutsideMessage, TokenTransfer};
+use paymaster_starknet::transaction::{CalldataBuilder, Calls, EstimatedCalls, ExecuteFromOutsideMessage, SequentialCalldataDecoder, TokenTransfer};
 use paymaster_starknet::Signature;
 use starknet::core::types::{Call, Felt, InvokeTransactionResult, TypedData};
 use starknet::macros::selector;
@@ -22,7 +22,7 @@ pub enum ExecutableTransactionParameters {
         invoke: ExecutableInvokeParameters,
     },
     DirectInvoke {
-        invoke: ExecutableDirectInvokeParameters
+        invoke: ExecutableDirectInvokeParameters,
     },
 }
 
@@ -32,7 +32,7 @@ impl ExecutableTransactionParameters {
             ExecutableTransactionParameters::Deploy { deployment } => deployment.get_unique_identifier(),
             ExecutableTransactionParameters::Invoke { invoke } => invoke.get_unique_identifier(),
             ExecutableTransactionParameters::DeployAndInvoke { invoke, .. } => invoke.get_unique_identifier(),
-            ExecutableTransactionParameters::DirectInvoke { invoke} => invoke.get_unique_indentifier(),
+            ExecutableTransactionParameters::DirectInvoke { invoke } => invoke.get_unique_indentifier(),
         }
     }
 }
@@ -105,13 +105,7 @@ impl ExecutableDirectInvokeParameters {
     ///
     /// For non-sponsored transactions, the last call should be a transfer of gas token to the forwarder.
     fn find_gas_token_transfer(&self, forwarder: Felt) -> Result<TokenTransfer, Error> {
-        let calls: Vec<Felt> = self
-            .execute_from_outside_call
-            .calldata
-            .iter()
-            .skip(5)
-            .cloned()
-            .collect();
+        let calls: Vec<Felt> = self.execute_from_outside_call.calldata.iter().skip(5).cloned().collect();
 
         let decoder = SequentialCalldataDecoder::new(&calls)?;
         let last_call = decoder.last().ok_or(Error::InvalidTypedData)?;
@@ -125,19 +119,13 @@ impl ExecutableDirectInvokeParameters {
             return Err(Error::InvalidTypedData);
         }
 
-        let recipient = last_call
-            .calldata
-            .first()
-            .ok_or(Error::InvalidTypedData)?;
+        let recipient = last_call.calldata.first().ok_or(Error::InvalidTypedData)?;
 
         if *recipient != forwarder {
             return Err(Error::InvalidTypedData);
         }
 
-        let amount = last_call
-            .calldata
-            .get(1)
-            .ok_or(Error::InvalidTypedData)?;
+        let amount = last_call.calldata.get(1).ok_or(Error::InvalidTypedData)?;
 
         Ok(TokenTransfer::new(last_call.to, forwarder, *amount))
     }
@@ -305,19 +293,19 @@ impl EstimatedExecutableTransaction {
 
 #[cfg(test)]
 mod tests {
-    use paymaster_starknet::transaction::{Calls, TokenTransfer};
-    use rand::Rng;
-    use starknet::accounts::{Account, AccountFactory};
-    use starknet::core::types::{Call, Felt};
-    use starknet::macros::{felt, selector};
-    use starknet::signers::SigningKey;
-    use crate::ExecutableDirectInvokeParameters;
     use crate::execution::build::{InvokeParameters, Transaction, TransactionParameters};
     use crate::execution::deploy::DeploymentParameters;
     use crate::execution::execute::{ExecutableInvokeParameters, ExecutableTransaction, ExecutableTransactionParameters};
     use crate::execution::{ExecutionParameters, FeeMode, TipPriority};
     use crate::testing::transaction::{an_eth_approve, an_eth_transfer};
     use crate::testing::{StarknetTestEnvironment, TestEnvironment};
+    use crate::ExecutableDirectInvokeParameters;
+    use paymaster_starknet::transaction::{Calls, TokenTransfer};
+    use rand::Rng;
+    use starknet::accounts::{Account, AccountFactory};
+    use starknet::core::types::{Call, Felt};
+    use starknet::macros::{felt, selector};
+    use starknet::signers::SigningKey;
 
     #[test]
     fn extract_gas_transfer_from_raw_call_works() {
@@ -355,7 +343,7 @@ mod tests {
                 to: felt!("0x999"),
                 selector: selector!("execute_from_outside"),
                 calldata,
-            }
+            },
         };
 
         let result = parameters.find_gas_token_transfer(forwarder);
@@ -392,7 +380,7 @@ mod tests {
                 to: felt!("0x999"),
                 selector: selector!("execute_from_outside"),
                 calldata,
-            }
+            },
         };
 
         let result = parameters.find_gas_token_transfer(forwarder);
@@ -425,7 +413,7 @@ mod tests {
                 to: felt!("0x999"),
                 selector: selector!("execute_from_outside"),
                 calldata,
-            }
+            },
         };
 
         let result = parameters.find_gas_token_transfer(forwarder);
@@ -450,7 +438,7 @@ mod tests {
                 to: felt!("0x999"),
                 selector: selector!("execute_from_outside"),
                 calldata,
-            }
+            },
         };
 
         let result = parameters.find_gas_token_transfer(forwarder);
@@ -474,7 +462,7 @@ mod tests {
                 to: felt!("0x999"),
                 selector: selector!("execute_from_outside"),
                 calldata,
-            }
+            },
         };
 
         let result = parameters.find_gas_token_transfer(forwarder);

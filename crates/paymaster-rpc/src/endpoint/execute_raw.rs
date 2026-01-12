@@ -24,7 +24,7 @@ pub enum ExecuteDirectTransactionParameters {
 impl From<ExecuteDirectTransactionParameters> for paymaster_execution::ExecutableTransactionParameters {
     fn from(value: ExecuteDirectTransactionParameters) -> Self {
         match value {
-            ExecuteDirectTransactionParameters::Invoke { invoke } => Self::DirectInvoke { invoke: invoke.into() }
+            ExecuteDirectTransactionParameters::Invoke { invoke } => Self::DirectInvoke { invoke: invoke.into() },
         }
     }
 }
