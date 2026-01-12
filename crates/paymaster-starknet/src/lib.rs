@@ -102,6 +102,9 @@ pub enum Error {
     #[error("typed data decoding {0}")]
     TypedDataDecoding(String),
 
+    #[error("calldata decoder {0}")]
+    CalldataDecoding(String),
+
     #[error("starknet error {0}")]
     Starknet(String),
 

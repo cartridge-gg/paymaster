@@ -1,5 +1,5 @@
 use paymaster_prices::math::convert_strk_to_token;
-use paymaster_starknet::transaction::{CalldataBuilder, Calls, EstimatedCalls, ExecuteFromOutsideMessage, TokenTransfer};
+use paymaster_starknet::transaction::{CalldataBuilder, SequentialCalldataDecoder, Calls, EstimatedCalls, ExecuteFromOutsideMessage, TokenTransfer};
 use paymaster_starknet::Signature;
 use starknet::core::types::{Call, Felt, InvokeTransactionResult, TypedData};
 use starknet::macros::selector;
@@ -21,9 +21,8 @@ pub enum ExecutableTransactionParameters {
         deployment: DeploymentParameters,
         invoke: ExecutableInvokeParameters,
     },
-    RawInvoke {
-        user: Felt,
-        execute_from_outside_call: Call,
+    DirectInvoke {
+        invoke: ExecutableDirectInvokeParameters
     },
 }
 
@@ -33,14 +32,7 @@ impl ExecutableTransactionParameters {
             ExecutableTransactionParameters::Deploy { deployment } => deployment.get_unique_identifier(),
             ExecutableTransactionParameters::Invoke { invoke } => invoke.get_unique_identifier(),
             ExecutableTransactionParameters::DeployAndInvoke { invoke, .. } => invoke.get_unique_identifier(),
-            ExecutableTransactionParameters::RawInvoke {
-                user, execute_from_outside_call, ..
-            } => {
-                let mut hasher = DefaultHasher::new();
-                user.hash(&mut hasher);
-                execute_from_outside_call.calldata.hash(&mut hasher);
-                hasher.finish()
-            },
+            ExecutableTransactionParameters::DirectInvoke { invoke} => invoke.get_unique_indentifier(),
         }
     }
 }
@@ -89,6 +81,68 @@ impl ExecutableInvokeParameters {
     }
 }
 
+#[derive(Debug, Hash)]
+pub struct ExecutableDirectInvokeParameters {
+    pub user: Felt,
+    pub execute_from_outside_call: Call,
+}
+
+impl ExecutableDirectInvokeParameters {
+    pub fn get_unique_indentifier(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        self.user.hash(&mut hasher);
+        self.execute_from_outside_call.calldata.hash(&mut hasher);
+
+        hasher.finish()
+    }
+
+    /// Extract gas transfer from a raw execute_from_outside call
+    ///
+    /// The execute_from_outside_call has calldata structure:
+    /// [caller, nonce, execute_after, execute_before, calls_array...]
+    /// where calls_array is [num_calls, ...encoded_calls]
+    /// and each call is [to, selector, calldata_len, ...calldata]
+    ///
+    /// For non-sponsored transactions, the last call should be a transfer of gas token to the forwarder.
+    fn find_gas_token_transfer(&self, forwarder: Felt) -> Result<TokenTransfer, Error> {
+        let calls: Vec<Felt> = self
+            .execute_from_outside_call
+            .calldata
+            .iter()
+            .skip(5)
+            .cloned()
+            .collect();
+
+        let decoder = SequentialCalldataDecoder::new(&calls)?;
+        let last_call = decoder.last().ok_or(Error::InvalidTypedData)?;
+
+        // Validate the last call is a transfer to the forwarder
+        if last_call.selector != selector!("transfer") {
+            return Err(Error::InvalidTypedData);
+        }
+
+        if last_call.calldata.len() != 3 {
+            return Err(Error::InvalidTypedData);
+        }
+
+        let recipient = last_call
+            .calldata
+            .first()
+            .ok_or(Error::InvalidTypedData)?;
+
+        if *recipient != forwarder {
+            return Err(Error::InvalidTypedData);
+        }
+
+        let amount = last_call
+            .calldata
+            .get(1)
+            .ok_or(Error::InvalidTypedData)?;
+
+        Ok(TokenTransfer::new(last_call.to, forwarder, *amount))
+    }
+}
+
 /// Paymaster transaction that contains the parameters to execute the transaction on Starknet
 pub struct ExecutableTransaction {
     /// The forwarder to use when executing the transaction
@@ -105,61 +159,6 @@ pub struct ExecutableTransaction {
 }
 
 impl ExecutableTransaction {
-    /// Extract gas transfer from a raw execute_from_outside call
-    ///
-    /// The execute_from_outside_call has calldata structure:
-    /// [caller, nonce, execute_after, execute_before, calls_array...]
-    /// where calls_array is [num_calls, ...encoded_calls]
-    /// and each call is [to, selector, calldata_len, ...calldata]
-    ///
-    /// For non-sponsored transactions, the last call should be a transfer of gas token to the forwarder.
-    fn extract_gas_transfer_from_raw_call(call: &Call, forwarder: Felt) -> Result<TokenTransfer, Error> {
-        let calldata = &call.calldata;
-
-        // Skip: caller (1), nonce (1), execute_after (1), execute_before (1) = 4 felts
-        if calldata.len() < 5 {
-            return Err(Error::InvalidTypedData);
-        }
-
-        let num_calls_idx = 4;
-        let num_calls: usize = calldata[num_calls_idx].try_into().map_err(|_| Error::InvalidTypedData)?;
-
-        if num_calls == 0 {
-            return Err(Error::InvalidTypedData);
-        }
-
-        // Extract the last call directly from the end of calldata
-        // A transfer call is always: [to, selector, calldata_len(=3), recipient, amount_low, amount_high]
-        // That's exactly 6 felts at the end of the calls array
-        const TRANSFER_CALL_SIZE: usize = 6;
-
-        if calldata.len() < num_calls_idx + 1 + TRANSFER_CALL_SIZE {
-            return Err(Error::InvalidTypedData);
-        }
-
-        let last_call_start = calldata.len() - TRANSFER_CALL_SIZE;
-        let last_call_token = calldata[last_call_start];
-        let last_call_selector = calldata[last_call_start + 1];
-        let last_call_calldata_len = calldata[last_call_start + 2];
-        let last_call_recipient = calldata[last_call_start + 3];
-        let last_call_amount = calldata[last_call_start + 4]; // amount_low
-
-        // Validate the last call is a transfer to the forwarder
-        if last_call_selector != selector!("transfer") {
-            return Err(Error::InvalidTypedData);
-        }
-
-        if last_call_calldata_len != Felt::THREE {
-            return Err(Error::InvalidTypedData);
-        }
-
-        if last_call_recipient != forwarder {
-            return Err(Error::InvalidTypedData);
-        }
-
-        Ok(TokenTransfer::new(last_call_token, forwarder, last_call_amount))
-    }
-
     /// Estimate a sponsored transaction which is a transaction that will be paid by the relayer
     pub async fn estimate_sponsored_transaction(self, client: &Client, sponsor_metadata: Vec<Felt>) -> Result<EstimatedExecutableTransaction, Error> {
         let calls = self.build_sponsored_calls(sponsor_metadata);
@@ -185,9 +184,9 @@ impl ExecutableTransaction {
                 let transfer = invoke.find_gas_token_transfer(self.forwarder)?;
                 (transfer.token(), transfer.amount())
             },
-            ExecutableTransactionParameters::RawInvoke { execute_from_outside_call, .. } => {
+            ExecutableTransactionParameters::DirectInvoke { invoke, .. } => {
                 // Extract the gas transfer from the execute_from_outside_call
-                let transfer = Self::extract_gas_transfer_from_raw_call(execute_from_outside_call, self.forwarder)?;
+                let transfer = invoke.find_gas_token_transfer(self.forwarder)?;
                 (transfer.token(), transfer.amount())
             },
             _ => return Err(Error::InvalidTypedData),
@@ -221,7 +220,7 @@ impl ExecutableTransaction {
             ExecutableTransactionParameters::Deploy { .. } => Ok(client.compute_paid_fee_in_strk(base_estimate)),
             ExecutableTransactionParameters::Invoke { invoke, .. } => client.compute_paid_fee_with_overhead_in_strk(invoke.user, base_estimate).await,
             ExecutableTransactionParameters::DeployAndInvoke { invoke, .. } => client.compute_paid_fee_with_overhead_in_strk(invoke.user, base_estimate).await,
-            ExecutableTransactionParameters::RawInvoke { user, .. } => client.compute_paid_fee_with_overhead_in_strk(*user, base_estimate).await,
+            ExecutableTransactionParameters::DirectInvoke { invoke, .. } => client.compute_paid_fee_with_overhead_in_strk(invoke.user, base_estimate).await,
         }
     }
 
@@ -257,7 +256,7 @@ impl ExecutableTransaction {
         let execute_from_outside_call = match &self.transaction {
             ExecutableTransactionParameters::Invoke { invoke, .. } => invoke.message.to_call(invoke.user, &invoke.signature),
             ExecutableTransactionParameters::DeployAndInvoke { invoke, .. } => invoke.message.to_call(invoke.user, &invoke.signature),
-            ExecutableTransactionParameters::RawInvoke { execute_from_outside_call, .. } => execute_from_outside_call.clone(),
+            ExecutableTransactionParameters::DirectInvoke { invoke, .. } => invoke.execute_from_outside_call.clone(),
             _ => return None,
         };
 
@@ -277,7 +276,7 @@ impl ExecutableTransaction {
         let execute_from_outside_call = match &self.transaction {
             ExecutableTransactionParameters::Invoke { invoke, .. } => invoke.message.to_call(invoke.user, &invoke.signature),
             ExecutableTransactionParameters::DeployAndInvoke { invoke, .. } => invoke.message.to_call(invoke.user, &invoke.signature),
-            ExecutableTransactionParameters::RawInvoke { execute_from_outside_call, .. } => execute_from_outside_call.clone(),
+            ExecutableTransactionParameters::DirectInvoke { invoke, .. } => invoke.execute_from_outside_call.clone(),
             _ => return None,
         };
 
@@ -312,7 +311,7 @@ mod tests {
     use starknet::core::types::{Call, Felt};
     use starknet::macros::{felt, selector};
     use starknet::signers::SigningKey;
-
+    use crate::ExecutableDirectInvokeParameters;
     use crate::execution::build::{InvokeParameters, Transaction, TransactionParameters};
     use crate::execution::deploy::DeploymentParameters;
     use crate::execution::execute::{ExecutableInvokeParameters, ExecutableTransaction, ExecutableTransactionParameters};
@@ -350,13 +349,16 @@ mod tests {
             Felt::ZERO,            // amount_high
         ];
 
-        let call = Call {
-            to: felt!("0x999"),
-            selector: selector!("execute_from_outside"),
-            calldata,
+        let parameters = ExecutableDirectInvokeParameters {
+            user: Felt::ZERO,
+            execute_from_outside_call: Call {
+                to: felt!("0x999"),
+                selector: selector!("execute_from_outside"),
+                calldata,
+            }
         };
 
-        let result = ExecutableTransaction::extract_gas_transfer_from_raw_call(&call, forwarder);
+        let result = parameters.find_gas_token_transfer(forwarder);
         assert!(result.is_ok());
 
         let transfer = result.unwrap();
@@ -384,13 +386,16 @@ mod tests {
             Felt::ZERO,           // amount_high
         ];
 
-        let call = Call {
-            to: felt!("0x999"),
-            selector: selector!("execute_from_outside"),
-            calldata,
+        let parameters = ExecutableDirectInvokeParameters {
+            user: Felt::ZERO,
+            execute_from_outside_call: Call {
+                to: felt!("0x999"),
+                selector: selector!("execute_from_outside"),
+                calldata,
+            }
         };
 
-        let result = ExecutableTransaction::extract_gas_transfer_from_raw_call(&call, forwarder);
+        let result = parameters.find_gas_token_transfer(forwarder);
         assert!(result.is_err());
     }
 
@@ -414,13 +419,16 @@ mod tests {
             Felt::ZERO,            // amount_high
         ];
 
-        let call = Call {
-            to: felt!("0x999"),
-            selector: selector!("execute_from_outside"),
-            calldata,
+        let parameters = ExecutableDirectInvokeParameters {
+            user: Felt::ZERO,
+            execute_from_outside_call: Call {
+                to: felt!("0x999"),
+                selector: selector!("execute_from_outside"),
+                calldata,
+            }
         };
 
-        let result = ExecutableTransaction::extract_gas_transfer_from_raw_call(&call, forwarder);
+        let result = parameters.find_gas_token_transfer(forwarder);
         assert!(result.is_err());
     }
 
@@ -436,13 +444,16 @@ mod tests {
             Felt::ZERO,   // num_calls = 0
         ];
 
-        let call = Call {
-            to: felt!("0x999"),
-            selector: selector!("execute_from_outside"),
-            calldata,
+        let parameters = ExecutableDirectInvokeParameters {
+            user: Felt::ZERO,
+            execute_from_outside_call: Call {
+                to: felt!("0x999"),
+                selector: selector!("execute_from_outside"),
+                calldata,
+            }
         };
 
-        let result = ExecutableTransaction::extract_gas_transfer_from_raw_call(&call, forwarder);
+        let result = parameters.find_gas_token_transfer(forwarder);
         assert!(result.is_err());
     }
 
@@ -457,13 +468,16 @@ mod tests {
             felt!("0x3"), // execute_after
         ];
 
-        let call = Call {
-            to: felt!("0x999"),
-            selector: selector!("execute_from_outside"),
-            calldata,
+        let parameters = ExecutableDirectInvokeParameters {
+            user: Felt::ZERO,
+            execute_from_outside_call: Call {
+                to: felt!("0x999"),
+                selector: selector!("execute_from_outside"),
+                calldata,
+            }
         };
 
-        let result = ExecutableTransaction::extract_gas_transfer_from_raw_call(&call, forwarder);
+        let result = parameters.find_gas_token_transfer(forwarder);
         assert!(result.is_err());
     }
 

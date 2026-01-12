@@ -14,7 +14,7 @@ use crate::transaction::{ExecuteFromOutsideMessage, ExecuteFromOutsideParameters
 use crate::{ChainID, Error, StarknetAccount};
 
 mod calldata;
-pub use calldata::{AsCalldata, CalldataBuilder};
+pub use calldata::{AsCalldata, CalldataBuilder, SequentialCalldataDecoder};
 mod transfer;
 pub use transfer::{StrkTransfer, TokenTransfer};
 use uuid::Uuid;

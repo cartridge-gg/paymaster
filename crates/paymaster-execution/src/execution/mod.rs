@@ -5,7 +5,7 @@ mod deploy;
 pub use deploy::DeploymentParameters;
 
 mod execute;
-pub use execute::{EstimatedExecutableTransaction, ExecutableInvokeParameters, ExecutableTransaction, ExecutableTransactionParameters};
+pub use execute::{EstimatedExecutableTransaction, ExecutableInvokeParameters, ExecutableTransaction, ExecutableTransactionParameters, ExecutableDirectInvokeParameters};
 
 mod fee;
 pub use fee::{FeeEstimate, ValidationGasOverhead};

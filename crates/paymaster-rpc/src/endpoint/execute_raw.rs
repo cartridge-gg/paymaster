@@ -10,42 +10,46 @@ use crate::endpoint::RequestContext;
 use crate::Error;
 
 #[derive(Serialize, Deserialize)]
-pub struct ExecuteRawRequest {
-    pub transaction: ExecuteRawTransactionParameters,
+pub struct ExecuteDirectRequest {
+    pub transaction: ExecuteDirectTransactionParameters,
     pub parameters: ExecutionParameters,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-pub enum ExecuteRawTransactionParameters {
-    RawInvoke { invoke: RawInvokeParameters },
+pub enum ExecuteDirectTransactionParameters {
+    Invoke { invoke: DirectInvokeParameters },
 }
 
-impl TryFrom<ExecuteRawTransactionParameters> for paymaster_execution::ExecutableTransactionParameters {
-    type Error = Error;
-
-    fn try_from(value: ExecuteRawTransactionParameters) -> Result<Self, Self::Error> {
-        Ok(match value {
-            ExecuteRawTransactionParameters::RawInvoke { invoke } => Self::RawInvoke {
-                user: invoke.user_address,
-                execute_from_outside_call: invoke.execute_from_outside_call,
-            },
-        })
+impl From<ExecuteDirectTransactionParameters> for paymaster_execution::ExecutableTransactionParameters {
+    fn from(value: ExecuteDirectTransactionParameters) -> Self {
+        match value {
+            ExecuteDirectTransactionParameters::Invoke { invoke } => Self::DirectInvoke { invoke: invoke.into() }
+        }
     }
 }
 
 #[serde_as]
 #[derive(Serialize, Deserialize)]
-pub struct RawInvokeParameters {
+pub struct DirectInvokeParameters {
     #[serde_as(as = "UfeHex")]
     pub user_address: Felt,
 
     pub execute_from_outside_call: Call,
 }
 
+impl From<DirectInvokeParameters> for paymaster_execution::ExecutableDirectInvokeParameters {
+    fn from(value: DirectInvokeParameters) -> Self {
+        Self {
+            user: value.user_address,
+            execute_from_outside_call: value.execute_from_outside_call,
+        }
+    }
+}
+
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ExecuteRawResponse {
+pub struct ExecuteDirectResponse {
     #[serde_as(as = "UfeHex")]
     pub transaction_hash: Felt,
 
@@ -53,7 +57,7 @@ pub struct ExecuteRawResponse {
     pub tracking_id: Felt,
 }
 
-pub async fn execute_raw_endpoint(ctx: &RequestContext<'_>, request: ExecuteRawRequest) -> Result<ExecuteRawResponse, Error> {
+pub async fn execute_raw_endpoint(ctx: &RequestContext<'_>, request: ExecuteDirectRequest) -> Result<ExecuteDirectResponse, Error> {
     check_service_is_available(ctx).await?;
 
     let forwarder = ctx.configuration.forwarder;
@@ -63,7 +67,7 @@ pub async fn execute_raw_endpoint(ctx: &RequestContext<'_>, request: ExecuteRawR
         forwarder,
         gas_tank_address,
         parameters: request.parameters.into(),
-        transaction: request.transaction.try_into()?,
+        transaction: request.transaction.into(),
     };
 
     let estimated_transaction = if transaction.parameters.fee_mode().is_sponsored() {
@@ -76,8 +80,7 @@ pub async fn execute_raw_endpoint(ctx: &RequestContext<'_>, request: ExecuteRawR
     };
 
     let result = estimated_transaction.execute(&ctx.execution).await?;
-
-    Ok(ExecuteRawResponse {
+    Ok(ExecuteDirectResponse {
         transaction_hash: result.transaction_hash,
         tracking_id: Felt::ZERO,
     })
@@ -96,7 +99,7 @@ mod tests {
 
     use crate::endpoint::build::{build_transaction_endpoint, BuildTransactionRequest, BuildTransactionResponse, InvokeParameters, TransactionParameters};
     use crate::endpoint::common::{ExecutionParameters, FeeMode, TipPriority};
-    use crate::endpoint::execute_raw::{execute_raw_endpoint, ExecuteRawRequest, ExecuteRawTransactionParameters, RawInvokeParameters};
+    use crate::endpoint::execute_raw::{execute_raw_endpoint, DirectInvokeParameters, ExecuteDirectRequest, ExecuteDirectTransactionParameters};
     use crate::endpoint::RequestContext;
     use crate::testing::TestEnvironment;
     use crate::{Error, InvokeTransaction};
@@ -169,9 +172,9 @@ mod tests {
         // set no token available
         context.price = paymaster_prices::Client::mock::<NoPriceOracle>();
 
-        let request = ExecuteRawRequest {
-            transaction: ExecuteRawTransactionParameters::RawInvoke {
-                invoke: RawInvokeParameters {
+        let request = ExecuteDirectRequest {
+            transaction: ExecuteDirectTransactionParameters::Invoke {
+                invoke: DirectInvokeParameters {
                     user_address: StarknetTestEnvironment::ACCOUNT_ARGENT_1.address,
                     execute_from_outside_call,
                 },
@@ -230,9 +233,9 @@ mod tests {
         let message = ExecuteFromOutsideMessage::from_typed_data(&typed_data).unwrap();
         let execute_from_outside_call: Call = message.to_call(StarknetTestEnvironment::ACCOUNT_ARGENT_1.address, &vec![signature.r, signature.s]);
 
-        let request = ExecuteRawRequest {
-            transaction: ExecuteRawTransactionParameters::RawInvoke {
-                invoke: RawInvokeParameters {
+        let request = ExecuteDirectRequest {
+            transaction: ExecuteDirectTransactionParameters::Invoke {
+                invoke: DirectInvokeParameters {
                     user_address: StarknetTestEnvironment::ACCOUNT_ARGENT_1.address,
                     execute_from_outside_call,
                 },
