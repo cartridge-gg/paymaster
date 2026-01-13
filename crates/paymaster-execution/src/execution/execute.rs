@@ -163,25 +163,14 @@ impl ExecutableTransaction {
     }
 
     pub async fn estimate_transaction(self, client: &Client) -> Result<EstimatedExecutableTransaction, Error> {
-        let (gas_token, max_gas_token_amount) = match &self.transaction {
-            ExecutableTransactionParameters::Invoke { invoke, .. } => {
-                let transfer = invoke.find_gas_token_transfer(self.forwarder)?;
-                (transfer.token(), transfer.amount())
-            },
-            ExecutableTransactionParameters::DeployAndInvoke { invoke, .. } => {
-                let transfer = invoke.find_gas_token_transfer(self.forwarder)?;
-                (transfer.token(), transfer.amount())
-            },
-            ExecutableTransactionParameters::DirectInvoke { invoke, .. } => {
-                // Extract the gas transfer from the execute_from_outside_call
-                let transfer = invoke.find_gas_token_transfer(self.forwarder)?;
-                (transfer.token(), transfer.amount())
-            },
+        let transfer = match &self.transaction {
+            ExecutableTransactionParameters::Invoke { invoke, .. } => invoke.find_gas_token_transfer(self.forwarder)?,
+            ExecutableTransactionParameters::DeployAndInvoke { invoke, .. } => invoke.find_gas_token_transfer(self.forwarder)?,
+            ExecutableTransactionParameters::DirectInvoke { invoke, .. } => invoke.find_gas_token_transfer(self.forwarder)?,
             _ => return Err(Error::InvalidTypedData),
         };
 
-        let placeholder_transfer = TokenTransfer::new(gas_token, self.forwarder, max_gas_token_amount);
-        let calls = self.build_calls(placeholder_transfer);
+        let calls = self.build_calls(transfer);
 
         let estimated_calls = client.estimate(&calls, self.parameters.tip()).await?;
         let fee_estimate = estimated_calls.estimate();
@@ -189,14 +178,14 @@ impl ExecutableTransaction {
         let paid_fee_in_strk = self.compute_paid_fee(client, Felt::from(fee_estimate.overall_fee)).await?;
         let final_fee_estimate = fee_estimate.update_overall_fee(paid_fee_in_strk);
 
-        let token_price = client.price.fetch_token(gas_token).await?;
+        let token_price = client.price.fetch_token(transfer.token()).await?;
         let paid_fee_in_token = convert_strk_to_token(&token_price, paid_fee_in_strk, true)?;
 
-        if paid_fee_in_token > max_gas_token_amount {
+        if paid_fee_in_token > transfer.amount() {
             return Err(Error::MaxAmountTooLow(paid_fee_in_token.to_hex_string()));
         }
 
-        let fee_transfer = TokenTransfer::new(gas_token, self.gas_tank_address, paid_fee_in_token);
+        let fee_transfer = TokenTransfer::new(transfer.token(), self.gas_tank_address, paid_fee_in_token);
         let final_calls = self.build_calls(fee_transfer);
         let estimated_final_calls = final_calls.with_estimate(final_fee_estimate);
 

@@ -44,8 +44,8 @@ pub trait PaymasterAPI {
     #[method(name = "paymaster_executeTransaction", with_extensions)]
     async fn execute_transaction(&self, params: ExecuteRequest) -> Result<ExecuteResponse, Error>;
 
-    #[method(name = "paymaster_executeRawTransaction", with_extensions)]
-    async fn execute_raw_transaction(&self, params: ExecuteDirectRequest) -> Result<ExecuteDirectResponse, Error>;
+    #[method(name = "paymaster_executeDirectTransaction", with_extensions)]
+    async fn execute_direct_transaction(&self, params: ExecuteDirectRequest) -> Result<ExecuteDirectResponse, Error>;
 
     #[method(name = "paymaster_getSupportedTokens", with_extensions)]
     async fn get_supported_tokens(&self) -> Result<Vec<TokenPrice>, Error>;

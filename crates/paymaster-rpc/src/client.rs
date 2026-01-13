@@ -1,6 +1,7 @@
 use jsonrpsee::http_client::HttpClient;
 
 use crate::{BuildTransactionRequest, BuildTransactionResponse, ExecuteRequest, ExecuteResponse, PaymasterAPIClient, TokenPrice};
+use crate::endpoint::execute_raw::{ExecuteDirectRequest, ExecuteDirectResponse};
 
 pub type Error = jsonrpsee::core::ClientError;
 
@@ -27,6 +28,10 @@ impl Client {
         self.inner.execute_transaction(params).await
     }
 
+    pub async fn execute_direct_transaction(&self, params: ExecuteDirectRequest) -> Result<ExecuteDirectResponse, Error> {
+        self.inner.execute_direct_transaction(params).await
+    }
+    
     pub async fn get_supported_tokens(&self) -> Result<Vec<TokenPrice>, Error> {
         self.inner.get_supported_tokens().await
     }

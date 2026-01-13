@@ -57,7 +57,7 @@ pub struct ExecuteDirectResponse {
     pub tracking_id: Felt,
 }
 
-pub async fn execute_raw_endpoint(ctx: &RequestContext<'_>, request: ExecuteDirectRequest) -> Result<ExecuteDirectResponse, Error> {
+pub async fn execute_direct_endpoint(ctx: &RequestContext<'_>, request: ExecuteDirectRequest) -> Result<ExecuteDirectResponse, Error> {
     check_service_is_available(ctx).await?;
 
     let forwarder = ctx.configuration.forwarder;
@@ -99,7 +99,7 @@ mod tests {
 
     use crate::endpoint::build::{build_transaction_endpoint, BuildTransactionRequest, BuildTransactionResponse, InvokeParameters, TransactionParameters};
     use crate::endpoint::common::{ExecutionParameters, FeeMode, TipPriority};
-    use crate::endpoint::execute_raw::{execute_raw_endpoint, DirectInvokeParameters, ExecuteDirectRequest, ExecuteDirectTransactionParameters};
+    use crate::endpoint::execute_raw::{execute_direct_endpoint, DirectInvokeParameters, ExecuteDirectRequest, ExecuteDirectTransactionParameters};
     use crate::endpoint::RequestContext;
     use crate::testing::TestEnvironment;
     use crate::{Error, InvokeTransaction};
@@ -188,7 +188,7 @@ mod tests {
             },
         };
 
-        let result = execute_raw_endpoint(&RequestContext::empty(&context), request).await;
+        let result = execute_direct_endpoint(&RequestContext::empty(&context), request).await;
         assert!(matches!(result, Err(Error::ServiceNotAvailable)))
     }
 
@@ -249,7 +249,7 @@ mod tests {
             },
         };
 
-        let result = execute_raw_endpoint(&request_context, request).await;
+        let result = execute_direct_endpoint(&request_context, request).await;
         assert!(result.is_ok())
     }
 }
