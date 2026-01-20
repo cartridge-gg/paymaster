@@ -2,6 +2,30 @@
 
 set -euo pipefail
 
+resolve_version() {
+  local version="$1"
+  local list_all
+
+  version="$(printf "%s\n" "$version" | awk 'NF {last=$0} END {print last}')"
+  version="$(printf "%s" "$version" | tr -d '\r')"
+
+  if [[ "$version" == "latest" ]]; then
+    list_all="$(dirname "${BASH_SOURCE[0]}")/list-all"
+    if [[ ! -x "$list_all" ]]; then
+      echo "Error: list-all not found; cannot resolve latest" >&2
+      exit 1
+    fi
+    version="$("$list_all" | awk 'NF {last=$0} END {print last}')"
+  fi
+
+  if [[ -z "$version" ]]; then
+    echo "Error: Could not resolve version" >&2
+    exit 1
+  fi
+
+  printf "%s" "$version"
+}
+
 get_platform() {
   local os arch
 
@@ -66,6 +90,7 @@ main() {
   local download_path="${ASDF_DOWNLOAD_PATH}"
   local platform extension
 
+  version="$(resolve_version "$version")"
   platform="$(get_platform)"
   extension="$(get_extension)"
 
