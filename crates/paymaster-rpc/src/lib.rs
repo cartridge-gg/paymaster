@@ -13,7 +13,7 @@ mod context;
 pub use context::{Configuration, RPCConfiguration};
 
 mod endpoint;
-use crate::endpoint::execute_raw::{ExecuteDirectRequest, ExecuteDirectResponse, ExecuteRawRequest, ExecuteRawResponse};
+use crate::endpoint::execute_raw::{ExecuteDirectRequest, ExecuteDirectResponse};
 pub use endpoint::build::{
     BuildTransactionRequest, BuildTransactionResponse, DeployAndInvokeTransaction, DeployTransaction, FeeEstimate, InvokeParameters, InvokeTransaction,
     TransactionParameters,
