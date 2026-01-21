@@ -20,7 +20,6 @@ pub use endpoint::build::{
 };
 pub use endpoint::common::{DeploymentParameters, ExecutionParameters, FeeMode, TimeBounds};
 pub use endpoint::execute::{ExecutableInvokeParameters, ExecutableTransactionParameters, ExecuteRequest, ExecuteResponse};
-pub use endpoint::execute_raw::{ExecuteRawRequest, ExecuteRawResponse, ExecuteRawTransactionParameters, RawInvokeParameters};
 pub use endpoint::token::TokenPrice;
 
 mod middleware;
@@ -47,9 +46,6 @@ pub trait PaymasterAPI {
 
     #[method(name = "paymaster_executeDirectTransaction", with_extensions)]
     async fn execute_direct_transaction(&self, params: ExecuteDirectRequest) -> Result<ExecuteDirectResponse, Error>;
-
-    #[method(name = "paymaster_executeRawTransaction", with_extensions)]
-    async fn execute_raw_transaction(&self, params: ExecuteRawRequest) -> Result<ExecuteRawResponse, Error>;
 
     #[method(name = "paymaster_getSupportedTokens", with_extensions)]
     async fn get_supported_tokens(&self) -> Result<Vec<TokenPrice>, Error>;

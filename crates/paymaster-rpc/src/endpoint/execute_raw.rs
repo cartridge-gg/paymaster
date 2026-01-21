@@ -29,33 +29,6 @@ impl From<ExecuteDirectTransactionParameters> for paymaster_execution::Executabl
     }
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct ExecuteRawRequest {
-    pub transaction: ExecuteRawTransactionParameters,
-    pub parameters: ExecutionParameters,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum ExecuteRawTransactionParameters {
-    RawInvoke { invoke: RawInvokeParameters },
-}
-
-impl TryFrom<ExecuteRawTransactionParameters> for paymaster_execution::ExecutableTransactionParameters {
-    type Error = Error;
-
-    fn try_from(value: ExecuteRawTransactionParameters) -> Result<Self, Self::Error> {
-        Ok(match value {
-            ExecuteRawTransactionParameters::RawInvoke { invoke } => Self::RawInvoke {
-                user: invoke.user_address,
-                execute_from_outside_call: invoke.execute_from_outside_call,
-                gas_token: invoke.gas_token,
-                max_gas_token_amount: invoke.max_gas_token_amount,
-            },
-        })
-    }
-}
-
 #[serde_as]
 #[derive(Serialize, Deserialize)]
 pub struct DirectInvokeParameters {
@@ -75,35 +48,8 @@ impl From<DirectInvokeParameters> for paymaster_execution::ExecutableDirectInvok
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize)]
-pub struct RawInvokeParameters {
-    #[serde_as(as = "UfeHex")]
-    pub user_address: Felt,
-
-    pub execute_from_outside_call: Call,
-
-    #[serde_as(as = "Option<UfeHex>")]
-    #[serde(default)]
-    pub gas_token: Option<Felt>,
-
-    #[serde_as(as = "Option<UfeHex>")]
-    #[serde(default)]
-    pub max_gas_token_amount: Option<Felt>,
-}
-
-#[serde_as]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ExecuteDirectResponse {
-    #[serde_as(as = "UfeHex")]
-    pub transaction_hash: Felt,
-
-    #[serde_as(as = "UfeHex")]
-    pub tracking_id: Felt,
-}
-
-#[serde_as]
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ExecuteRawResponse {
     #[serde_as(as = "UfeHex")]
     pub transaction_hash: Felt,
 
@@ -141,36 +87,6 @@ pub async fn execute_direct_endpoint(ctx: &RequestContext<'_>, request: ExecuteD
     })
 }
 
-pub async fn execute_raw_endpoint(ctx: &RequestContext<'_>, request: ExecuteRawRequest) -> Result<ExecuteRawResponse, Error> {
-    check_service_is_available(ctx).await?;
-
-    let forwarder = ctx.configuration.forwarder;
-    let gas_tank_address = ctx.configuration.gas_tank.address;
-
-    let transaction = ExecutableTransaction {
-        forwarder,
-        gas_tank_address,
-        parameters: request.parameters.into(),
-        transaction: request.transaction.try_into()?,
-    };
-
-    let estimated_transaction = if transaction.parameters.fee_mode().is_sponsored() {
-        let authenticated_api_key = ctx.validate_api_key().await?;
-        transaction
-            .estimate_sponsored_transaction(&ctx.execution, authenticated_api_key.sponsor_metadata)
-            .await?
-    } else {
-        transaction.estimate_transaction(&ctx.execution).await?
-    };
-
-    let result = estimated_transaction.execute(&ctx.execution).await?;
-
-    Ok(ExecuteRawResponse {
-        transaction_hash: result.transaction_hash,
-        tracking_id: Felt::ZERO,
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
@@ -184,10 +100,7 @@ mod tests {
 
     use crate::endpoint::build::{build_transaction_endpoint, BuildTransactionRequest, BuildTransactionResponse, InvokeParameters, TransactionParameters};
     use crate::endpoint::common::{ExecutionParameters, FeeMode, TipPriority};
-    use crate::endpoint::execute_raw::{
-        execute_direct_endpoint, execute_raw_endpoint, DirectInvokeParameters, ExecuteDirectRequest, ExecuteDirectTransactionParameters, ExecuteRawRequest,
-        ExecuteRawTransactionParameters, RawInvokeParameters,
-    };
+    use crate::endpoint::execute_raw::{execute_direct_endpoint, DirectInvokeParameters, ExecuteDirectRequest, ExecuteDirectTransactionParameters};
     use crate::endpoint::RequestContext;
     use crate::testing::TestEnvironment;
     use crate::{Error, InvokeTransaction};
@@ -216,7 +129,7 @@ mod tests {
     // TODO: enable when we can fix starknet image
     #[ignore]
     #[tokio::test]
-    async fn return_error_if_not_available_direct() {
+    async fn return_error_if_not_available() {
         let test = TestEnvironment::new().await;
 
         let mut context = test.context().clone();
@@ -283,76 +196,7 @@ mod tests {
     // TODO: enable when we can fix starknet image
     #[ignore]
     #[tokio::test]
-    async fn return_error_if_not_available_raw() {
-        let test = TestEnvironment::new().await;
-
-        let mut context = test.context().clone();
-
-        // Build a transaction first to get the typed_data
-        let build_request = BuildTransactionRequest {
-            transaction: TransactionParameters::Invoke {
-                invoke: InvokeParameters {
-                    user_address: StarknetTestEnvironment::ACCOUNT_ARGENT_1.address,
-                    calls: vec![an_eth_transfer(StarknetTestEnvironment::ACCOUNT_2.address, Felt::ONE)],
-                },
-            },
-            parameters: ExecutionParameters::V1 {
-                fee_mode: FeeMode::Default {
-                    gas_token: StarknetTestEnvironment::ETH,
-                    tip: TipPriority::Normal,
-                },
-                time_bounds: None,
-            },
-        };
-
-        let build_response = build_transaction_endpoint(&RequestContext::empty(&context), build_request)
-            .await
-            .unwrap();
-        let BuildTransactionResponse::Invoke(InvokeTransaction { typed_data, .. }) = build_response else {
-            unreachable!()
-        };
-
-        // Sign the message
-        let message_hash = typed_data
-            .message_hash(StarknetTestEnvironment::ACCOUNT_ARGENT_1.address)
-            .unwrap();
-        let signature = SigningKey::from_secret_scalar(StarknetTestEnvironment::ACCOUNT_ARGENT_1.private_key)
-            .sign(&message_hash)
-            .unwrap();
-
-        // Build the execute_from_outside call from the typed_data
-        let message = ExecuteFromOutsideMessage::from_typed_data(&typed_data).unwrap();
-        let execute_from_outside_call: Call = message.to_call(StarknetTestEnvironment::ACCOUNT_ARGENT_1.address, &vec![signature.r, signature.s]);
-
-        // set no token available
-        context.price = paymaster_prices::Client::mock::<NoPriceOracle>();
-
-        let request = ExecuteRawRequest {
-            transaction: ExecuteRawTransactionParameters::RawInvoke {
-                invoke: RawInvokeParameters {
-                    user_address: StarknetTestEnvironment::ACCOUNT_ARGENT_1.address,
-                    execute_from_outside_call,
-                    gas_token: Some(StarknetTestEnvironment::ETH),
-                    max_gas_token_amount: Some(Felt::from(1e18 as u128)),
-                },
-            },
-            parameters: ExecutionParameters::V1 {
-                fee_mode: FeeMode::Default {
-                    gas_token: StarknetTestEnvironment::ETH,
-                    tip: TipPriority::Normal,
-                },
-                time_bounds: None,
-            },
-        };
-
-        let result = execute_raw_endpoint(&RequestContext::empty(&context), request).await;
-        assert!(matches!(result, Err(Error::ServiceNotAvailable)))
-    }
-
-    // TODO: enable when we can fix starknet image
-    #[ignore]
-    #[tokio::test]
-    async fn execute_direct_works_properly() {
+    async fn execute_raw_works_properly() {
         let test = TestEnvironment::new().await;
         let request_context = RequestContext::empty(&test.context());
 
@@ -407,69 +251,6 @@ mod tests {
         };
 
         let result = execute_direct_endpoint(&request_context, request).await;
-        assert!(result.is_ok())
-    }
-
-    // TODO: enable when we can fix starknet image
-    #[ignore]
-    #[tokio::test]
-    async fn execute_raw_works_properly() {
-        let test = TestEnvironment::new().await;
-        let request_context = RequestContext::empty(&test.context());
-
-        // Build a transaction first to get the typed_data
-        let build_request = BuildTransactionRequest {
-            transaction: TransactionParameters::Invoke {
-                invoke: InvokeParameters {
-                    user_address: StarknetTestEnvironment::ACCOUNT_ARGENT_1.address,
-                    calls: vec![an_eth_transfer(StarknetTestEnvironment::ACCOUNT_2.address, Felt::ONE)],
-                },
-            },
-            parameters: ExecutionParameters::V1 {
-                fee_mode: FeeMode::Default {
-                    gas_token: StarknetTestEnvironment::ETH,
-                    tip: TipPriority::Normal,
-                },
-                time_bounds: None,
-            },
-        };
-
-        let build_response = build_transaction_endpoint(&request_context, build_request).await.unwrap();
-        let BuildTransactionResponse::Invoke(InvokeTransaction { typed_data, .. }) = build_response else {
-            unreachable!()
-        };
-
-        // Sign the message
-        let message_hash = typed_data
-            .message_hash(StarknetTestEnvironment::ACCOUNT_ARGENT_1.address)
-            .unwrap();
-        let signature = SigningKey::from_secret_scalar(StarknetTestEnvironment::ACCOUNT_ARGENT_1.private_key)
-            .sign(&message_hash)
-            .unwrap();
-
-        // Build the execute_from_outside call from the typed_data
-        let message = ExecuteFromOutsideMessage::from_typed_data(&typed_data).unwrap();
-        let execute_from_outside_call: Call = message.to_call(StarknetTestEnvironment::ACCOUNT_ARGENT_1.address, &vec![signature.r, signature.s]);
-
-        let request = ExecuteRawRequest {
-            transaction: ExecuteRawTransactionParameters::RawInvoke {
-                invoke: RawInvokeParameters {
-                    user_address: StarknetTestEnvironment::ACCOUNT_ARGENT_1.address,
-                    execute_from_outside_call,
-                    gas_token: Some(StarknetTestEnvironment::ETH),
-                    max_gas_token_amount: Some(Felt::from(1e18 as u128)),
-                },
-            },
-            parameters: ExecutionParameters::V1 {
-                fee_mode: FeeMode::Default {
-                    gas_token: StarknetTestEnvironment::ETH,
-                    tip: TipPriority::Normal,
-                },
-                time_bounds: None,
-            },
-        };
-
-        let result = execute_raw_endpoint(&request_context, request).await;
         assert!(result.is_ok())
     }
 }

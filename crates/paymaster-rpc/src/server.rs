@@ -11,7 +11,7 @@ use tracing::{error, info, instrument, warn};
 use crate::context::Context;
 use crate::endpoint::build::build_transaction_endpoint;
 use crate::endpoint::execute::execute_endpoint;
-use crate::endpoint::execute_raw::{execute_direct_endpoint, execute_raw_endpoint, ExecuteDirectRequest, ExecuteDirectResponse, ExecuteRawRequest, ExecuteRawResponse};
+use crate::endpoint::execute_raw::{execute_direct_endpoint, ExecuteDirectRequest, ExecuteDirectResponse};
 use crate::endpoint::health::is_available_endpoint;
 use crate::endpoint::token::get_supported_tokens_endpoint;
 use crate::endpoint::RequestContext;
@@ -108,12 +108,6 @@ impl PaymasterAPIServer for PaymasterServer {
     async fn execute_direct_transaction(&self, ext: &Extensions, params: ExecuteDirectRequest) -> Result<ExecuteDirectResponse, Error> {
         let context = RequestContext::new(&self.context, ext);
         instrument_method!(execute_direct_endpoint(&context, params))
-    }
-
-    #[instrument(name = "paymaster_executeRawTransaction", skip(self, ext, params), fields(params = %serde_json::to_string(&params).unwrap_or_else(|_| "INVALID_JSON".into())))]
-    async fn execute_raw_transaction(&self, ext: &Extensions, params: ExecuteRawRequest) -> Result<ExecuteRawResponse, Error> {
-        let context = RequestContext::new(&self.context, ext);
-        instrument_method!(execute_raw_endpoint(&context, params))
     }
 
     #[instrument(name = "paymaster_getSupportedTokens", skip(self, ext))]
