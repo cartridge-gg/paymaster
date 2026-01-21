@@ -80,7 +80,6 @@ pub async fn execute_direct_endpoint(ctx: &RequestContext<'_>, request: ExecuteD
     };
 
     let result = estimated_transaction.execute(&ctx.execution).await?;
-
     Ok(ExecuteDirectResponse {
         transaction_hash: result.transaction_hash,
         tracking_id: Felt::ZERO,
