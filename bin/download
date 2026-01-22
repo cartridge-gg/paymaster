@@ -79,7 +79,7 @@ download_binary() {
   local extension="$4"
   local download_path="$5"
 
-  local url="https://github.com/cartridge-gg/paymaster/releases/download/v${version}/${binary_name}-v${version}-${platform}.${extension}"
+  local url="https://github.com/avnu-labs/paymaster/releases/download/v${version}/${binary_name}-v${version}-${platform}.${extension}"
 
   echo "Downloading ${binary_name} from ${url}..."
   curl -fsSL "$url" -o "${download_path}/${binary_name}.${extension}"
@@ -101,7 +101,7 @@ main() {
   download_binary "paymaster-service" "$version" "$platform" "$extension" "$download_path"
 
   # Download checksums for verification
-  local checksums_url="https://github.com/cartridge-gg/paymaster/releases/download/v${version}/checksums.txt"
+  local checksums_url="https://github.com/avnu-labs/paymaster/releases/download/v${version}/checksums.txt"
   echo "Downloading checksums..."
   curl -fsSL "$checksums_url" -o "${download_path}/checksums.txt" || echo "Warning: Could not download checksums"
 }

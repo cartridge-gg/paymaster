@@ -33,7 +33,7 @@ Install using [asdf](https://asdf-vm.com/) version manager:
 
 ```bash
 # Add the plugin
-asdf plugin add paymaster https://github.com/cartridge-gg/paymaster.git
+asdf plugin add paymaster https://github.com/avnu-labs/paymaster.git
 
 # Install a version
 asdf install paymaster latest
@@ -48,14 +48,14 @@ paymaster-service
 
 ### GitHub Releases
 
-Download pre-built binaries from [GitHub Releases](https://github.com/cartridge-gg/paymaster/releases).
+Download pre-built binaries from [GitHub Releases](https://github.com/avnu-labs/paymaster/releases).
 
 Available for: Linux (x86_64, aarch64), macOS (x86_64, aarch64), Windows (x86_64).
 
 ### Rust Binary
 
 ```bash
-git clone https://github.com/cartridge-gg/paymaster
+git clone https://github.com/avnu-labs/paymaster
 cd paymaster
 cargo build --release --bin paymaster-service
 ```
