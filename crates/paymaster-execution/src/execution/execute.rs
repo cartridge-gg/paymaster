@@ -56,21 +56,7 @@ impl ExecutableInvokeParameters {
     }
 
     fn find_gas_token_transfer(&self, forwarder: Felt) -> Result<TokenTransfer, Error> {
-        let last_call = self.message.calls().last().ok_or(Error::InvalidTypedData)?;
-        if last_call.selector != selector!("transfer") {
-            return Err(Error::InvalidTypedData);
-        }
-
-        let transfer_recipient = last_call.calldata.first().ok_or(Error::InvalidTypedData)?;
-        if *transfer_recipient != forwarder {
-            return Err(Error::InvalidTypedData);
-        }
-
-        Ok(TokenTransfer::new(
-            last_call.to,
-            *transfer_recipient,
-            *last_call.calldata.get(1).ok_or(Error::InvalidTypedData)?,
-        ))
+        find_gas_token_transfer_from_calls(self.message.calls().iter(), forwarder).ok_or(Error::InvalidTypedData)
     }
 
     pub fn get_unique_identifier(&self) -> u64 {
@@ -102,7 +88,7 @@ impl ExecutableDirectInvokeParameters {
     /// [caller, nonce..., execute_after, execute_before, calls_len, ...calls, sig_len, sig...]
     /// where each call is [to, selector, calldata_len, ...calldata] and the nonce may be one or two felts.
     ///
-    /// For non-sponsored transactions, the last call should be a transfer of gas token to the forwarder.
+    /// For non-sponsored transactions, the calls should include a transfer of gas token to the forwarder.
     fn find_gas_token_transfer(&self, forwarder: Felt) -> Result<TokenTransfer, Error> {
         fn extract_calls_segment<'a>(calldata: &'a [Felt], calls_len_index: usize) -> Option<&'a [Felt]> {
             let calls_len_felt = calldata.get(calls_len_index)?;
@@ -141,32 +127,15 @@ impl ExecutableDirectInvokeParameters {
             let Ok(decoder) = SequentialCalldataDecoder::new(calls) else {
                 continue;
             };
-            let Some(last_call) = decoder.last() else {
-                continue;
-            };
-
-            // Validate the last call is a transfer to the forwarder.
-            if last_call.selector != selector!("transfer") {
-                continue;
+            let mut found = None;
+            for call in decoder.iter() {
+                if let Some(transfer) = match_transfer_call(call.to, call.selector, &call.calldata, forwarder) {
+                    found = Some(transfer);
+                }
             }
-
-            if last_call.calldata.len() != 3 {
-                continue;
+            if let Some(transfer) = found {
+                return Ok(transfer);
             }
-
-            let Some(recipient) = last_call.calldata.first() else {
-                continue;
-            };
-
-            if *recipient != forwarder {
-                continue;
-            }
-
-            let Some(amount) = last_call.calldata.get(1) else {
-                continue;
-            };
-
-            return Ok(TokenTransfer::new(last_call.to, forwarder, *amount));
         }
 
         Err(Error::InvalidTypedData)
@@ -310,6 +279,33 @@ impl ExecutableTransaction {
     }
 }
 
+fn find_gas_token_transfer_from_calls<'a, I>(calls: I, forwarder: Felt) -> Option<TokenTransfer>
+where
+    I: IntoIterator<Item = &'a Call>,
+{
+    let mut found = None;
+    for call in calls {
+        if let Some(transfer) = match_transfer_call(call.to, call.selector, &call.calldata, forwarder) {
+            found = Some(transfer);
+        }
+    }
+    found
+}
+
+fn match_transfer_call(token: Felt, selector: Felt, calldata: &[Felt], forwarder: Felt) -> Option<TokenTransfer> {
+    if selector != selector!("transfer") {
+        return None;
+    }
+
+    let recipient = calldata.first()?;
+    if *recipient != forwarder {
+        return None;
+    }
+
+    let amount = calldata.get(1)?;
+    Some(TokenTransfer::new(token, forwarder, *amount))
+}
+
 /// Paymaster executable transaction that can be sent to Starknet
 #[derive(Debug)]
 pub struct EstimatedExecutableTransaction(EstimatedCalls);
@@ -441,7 +437,7 @@ mod tests {
     }
 
     #[test]
-    fn extract_gas_transfer_fails_when_last_call_not_transfer() {
+    fn extract_gas_transfer_fails_when_no_transfer_call() {
         let forwarder = felt!("0x123");
 
         let calldata = vec![
@@ -558,6 +554,53 @@ mod tests {
 
         let result = parameters.find_gas_token_transfer(forwarder);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn extract_gas_transfer_from_raw_call_works_when_transfer_not_last() {
+        let forwarder = felt!("0x123");
+        let token = felt!("0x456");
+        let amount = felt!("0x789");
+
+        let calldata = vec![
+            felt!("0x1"), // caller
+            felt!("0x2"), // nonce
+            felt!("0x3"), // execute_after
+            felt!("0x4"), // execute_before
+            Felt::TWO,    // num_calls = 2
+            // First call (gas transfer to forwarder)
+            token,                 // to (token address)
+            selector!("transfer"), // selector
+            Felt::THREE,           // calldata_len
+            forwarder,             // recipient (forwarder)
+            amount,                // amount_low
+            Felt::ZERO,            // amount_high
+            // Second call (user's approve)
+            felt!("0xAAA"),       // to
+            selector!("approve"), // selector
+            Felt::ONE,            // calldata_len
+            felt!("0xBBB"),       // spender
+            Felt::TWO,            // signature length
+            felt!("0xDEAD"),      // signature part 1
+            felt!("0xBEEF"),      // signature part 2
+        ];
+
+        let parameters = ExecutableDirectInvokeParameters {
+            user: Felt::ZERO,
+            execute_from_outside_call: Call {
+                to: felt!("0x999"),
+                selector: selector!("execute_from_outside"),
+                calldata,
+            },
+        };
+
+        let result = parameters.find_gas_token_transfer(forwarder);
+        assert!(result.is_ok());
+
+        let transfer = result.unwrap();
+        assert_eq!(transfer.token(), token);
+        assert_eq!(transfer.recipient(), forwarder);
+        assert_eq!(transfer.amount(), amount);
     }
 
     // TODO: enable when we can fix starknet image
