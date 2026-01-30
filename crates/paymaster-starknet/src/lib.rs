@@ -7,8 +7,8 @@ use starknet::core::serde::unsigned_field_element::UfeHex;
 use starknet::core::types::typed_data::TypedDataError;
 use starknet::core::types::SimulationFlagForEstimateFee::SkipValidate;
 use starknet::core::types::{
-    BlockId, BlockTag, BroadcastedTransaction, ContractExecutionError, FeeEstimate, Felt, FunctionCall, MaybePreConfirmedBlockWithTxs, StarknetError, Transaction,
-    TransactionReceiptWithBlockInfo, TransactionStatus,
+    BlockId, BlockTag, BroadcastedTransaction, ContractExecutionError, FeeEstimate, Felt, FunctionCall, MaybePreConfirmedBlockWithTxs, SimulatedTransaction,
+    SimulationFlag, StarknetError, Transaction, TransactionReceiptWithBlockInfo, TransactionStatus,
 };
 use starknet::macros::selector;
 use starknet::providers::{Provider, ProviderError};
@@ -283,6 +283,20 @@ impl Client {
 
         metric!(histogram[starknet_rpc] = duration.as_millis(), method = "estimate_transactions");
         metric!(on error result => counter [ starknet_rpc_error ] = 1, method = "estimate_transactions");
+
+        Ok(result?)
+    }
+
+    /// Simulates the `transaction` and returns its execution trace and fee estimation.
+    #[instrument(name = "simulate_transaction", skip(self))]
+    pub async fn simulate_transaction(&self, transaction: &BroadcastedTransaction) -> Result<SimulatedTransaction, Error> {
+        let block = BlockId::Tag(BlockTag::PreConfirmed);
+
+        let (result, duration) =
+            measure_duration!(log_if_error!(self.inner.simulate_transaction(block, transaction, vec![SimulationFlag::SkipValidate]).await));
+
+        metric!(histogram[starknet_rpc] = duration.as_millis(), method = "simulate_transaction");
+        metric!(on error result => counter [ starknet_rpc_error ] = 1, method = "simulate_transaction");
 
         Ok(result?)
     }

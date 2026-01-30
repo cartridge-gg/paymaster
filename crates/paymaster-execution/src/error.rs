@@ -20,6 +20,9 @@ pub enum Error {
     #[error("invalid typed data")]
     InvalidTypedData,
 
+    #[error("missing gas fee transfer event")]
+    MissingGasFeeTransferEvent,
+
     #[error("max amount of gas token too low. Expected at least {0}")]
     MaxAmountTooLow(String),
 
