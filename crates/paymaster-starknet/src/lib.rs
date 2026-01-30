@@ -292,8 +292,11 @@ impl Client {
     pub async fn simulate_transaction(&self, transaction: &BroadcastedTransaction) -> Result<SimulatedTransaction, Error> {
         let block = BlockId::Tag(BlockTag::PreConfirmed);
 
-        let (result, duration) =
-            measure_duration!(log_if_error!(self.inner.simulate_transaction(block, transaction, vec![SimulationFlag::SkipValidate]).await));
+        let (result, duration) = measure_duration!(log_if_error!(
+            self.inner
+                .simulate_transaction(block, transaction, vec![SimulationFlag::SkipValidate])
+                .await
+        ));
 
         metric!(histogram[starknet_rpc] = duration.as_millis(), method = "simulate_transaction");
         metric!(on error result => counter [ starknet_rpc_error ] = 1, method = "simulate_transaction");

@@ -247,7 +247,6 @@ impl ExecutableTransaction {
         Ok(EstimatedExecutableTransaction(estimated_final_calls))
     }
 
-
     async fn compute_paid_fee(&self, client: &Client, base_estimate: Felt) -> Result<Felt, Error> {
         match &self.transaction {
             ExecutableTransactionParameters::Deploy { .. } => Ok(client.compute_paid_fee_in_strk(base_estimate)),
@@ -424,14 +423,15 @@ impl EstimatedExecutableTransaction {
 
 #[cfg(test)]
 mod tests {
+    use super::extract_gas_token_transfer_from_simulation;
     use crate::execution::build::{InvokeParameters, Transaction, TransactionParameters};
     use crate::execution::deploy::DeploymentParameters;
     use crate::execution::execute::{ExecutableInvokeParameters, ExecutableTransaction, ExecutableTransactionParameters};
     use crate::execution::{ExecutionParameters, FeeMode, TipPriority};
     use crate::testing::transaction::{an_eth_approve, an_eth_transfer};
     use crate::testing::{StarknetTestEnvironment, TestEnvironment};
-    use crate::ExecutableDirectInvokeParameters;
     use crate::Error;
+    use crate::ExecutableDirectInvokeParameters;
     use paymaster_starknet::transaction::{Calls, TokenTransfer};
     use rand::Rng;
     use starknet::accounts::{Account, AccountFactory};
