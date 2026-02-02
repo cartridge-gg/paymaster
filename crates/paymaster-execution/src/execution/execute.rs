@@ -743,6 +743,7 @@ mod tests {
     fn extract_gas_transfer_from_raw_call_works_with_nested_execute_from_outside() {
         let forwarder = felt!("0x123");
         let token = felt!("0x456");
+        let amount_outer = felt!("0x3");
         let amount_one = felt!("0x9");
         let amount_two = felt!("0xA");
 
@@ -781,7 +782,14 @@ mod tests {
             felt!("0xA"), // nonce
             felt!("0xB"), // execute_after
             felt!("0xC"), // execute_before
-            Felt::TWO,    // num_calls = 2
+            Felt::THREE,  // num_calls = 3
+            // Outer transfer
+            token,
+            selector!("transfer"),
+            Felt::THREE,
+            forwarder,
+            amount_outer,
+            Felt::ZERO,
             // Nested call one
             felt!("0x111"),
             selector!("execute_from_outside"),
@@ -812,7 +820,7 @@ mod tests {
         let transfer = result.unwrap();
         assert_eq!(transfer.token(), token);
         assert_eq!(transfer.recipient(), forwarder);
-        assert_eq!(transfer.amount(), amount_one + amount_two);
+        assert_eq!(transfer.amount(), amount_outer + amount_one + amount_two);
     }
 
     // TODO: enable when we can fix starknet image
