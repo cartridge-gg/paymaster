@@ -177,6 +177,7 @@ impl ExecutableTransaction {
     }
 
     pub async fn estimate_transaction(self, client: &Client) -> Result<EstimatedExecutableTransaction, Error> {
+        // Parse calldata to collect all transfer funding to the forwarder (including nested execute_from_outside).
         let transfers = match &self.transaction {
             ExecutableTransactionParameters::Invoke { invoke, .. } => invoke.find_gas_token_transfers(self.forwarder)?,
             ExecutableTransactionParameters::DeployAndInvoke { invoke, .. } => invoke.find_gas_token_transfers(self.forwarder)?,
@@ -184,6 +185,7 @@ impl ExecutableTransaction {
             _ => return Err(Error::InvalidTypedData),
         };
 
+        // Build an initial call set using the configured gas token amount (if present) for estimation.
         let gas_token = self.parameters.gas_token();
         let gas_token_amount = transfers.get(&gas_token).cloned().unwrap_or(Felt::ZERO);
         let calls = self.build_calls(TokenTransfer::new(gas_token, self.gas_tank_address, gas_token_amount));
@@ -191,14 +193,17 @@ impl ExecutableTransaction {
         let estimated_calls = client.estimate(&calls, self.parameters.tip()).await?;
         let fee_estimate = estimated_calls.estimate();
 
+        // Compute the actual paid fee in STRK (including overhead) for validation.
         let paid_fee_in_strk = self.compute_paid_fee(client, Felt::from(fee_estimate.overall_fee)).await?;
         let final_fee_estimate = fee_estimate.update_overall_fee(paid_fee_in_strk);
 
+        // Validate total funding across all tokens by converting to STRK.
         let total_funding_in_strk = aggregate_transfers_in_strk(client, &transfers).await?;
         if total_funding_in_strk < paid_fee_in_strk {
             return Err(Error::MaxAmountTooLow(paid_fee_in_strk.to_hex_string()));
         }
 
+        // Convert the paid fee back into the configured gas token for the final paymaster execute call.
         let token_price = client.price.fetch_token(gas_token).await?;
         let paid_fee_in_token = convert_strk_to_token(&token_price, paid_fee_in_strk, true)?;
 
