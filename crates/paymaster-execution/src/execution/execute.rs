@@ -1,8 +1,10 @@
 use paymaster_prices::math::convert_strk_to_token;
+use paymaster_starknet::constants::Token;
 use paymaster_starknet::transaction::{CalldataBuilder, Calls, EstimatedCalls, ExecuteFromOutsideMessage, SequentialCalldataDecoder, TokenTransfer};
 use paymaster_starknet::Signature;
 use starknet::core::types::{Call, Felt, InvokeTransactionResult, TypedData};
 use starknet::macros::selector;
+use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use crate::execution::deploy::DeploymentParameters;
@@ -55,8 +57,13 @@ impl ExecutableInvokeParameters {
         })
     }
 
-    fn find_gas_token_transfer(&self, forwarder: Felt, gas_token: Felt) -> Result<TokenTransfer, Error> {
-        find_gas_token_transfer_from_calls(self.message.calls().iter(), forwarder, gas_token).ok_or(Error::InvalidTypedData)
+    fn find_gas_token_transfers(&self, forwarder: Felt) -> Result<HashMap<Felt, Felt>, Error> {
+        let transfers = collect_gas_transfers_from_calls(self.message.calls().iter(), forwarder);
+        if transfers.is_empty() {
+            return Err(Error::InvalidTypedData);
+        }
+
+        Ok(transfers)
     }
 
     pub fn get_unique_identifier(&self) -> u64 {
@@ -88,8 +95,8 @@ impl ExecutableDirectInvokeParameters {
     /// [caller, nonce..., execute_after, execute_before, calls_len, ...calls, sig_len, sig...]
     /// where each call is [to, selector, calldata_len, ...calldata] and the nonce may be one or two felts.
     ///
-    /// For non-sponsored transactions, the calls should include a transfer of gas token to the forwarder.
-    fn find_gas_token_transfer(&self, forwarder: Felt, gas_token: Felt) -> Result<TokenTransfer, Error> {
+    /// For non-sponsored transactions, the calls should include gas funding transfers to the forwarder.
+    fn find_gas_token_transfers(&self, forwarder: Felt) -> Result<HashMap<Felt, Felt>, Error> {
         fn extract_calls_segment<'a>(calldata: &'a [Felt], calls_len_index: usize) -> Option<&'a [Felt]> {
             let calls_len_felt = calldata.get(calls_len_index)?;
             let calls_len: usize = (*calls_len_felt).try_into().ok()?;
@@ -127,12 +134,13 @@ impl ExecutableDirectInvokeParameters {
             let Ok(decoder) = SequentialCalldataDecoder::new(calls) else {
                 continue;
             };
-            let total = aggregate_transfer_amount_from_decoded_calls(&decoder, forwarder, gas_token);
-            if total != Felt::ZERO {
-                return Ok(TokenTransfer::new(gas_token, forwarder, total));
+
+            let mut transfers = HashMap::new();
+            collect_gas_transfers_from_decoded_calls(&decoder, forwarder, &mut transfers);
+            if !transfers.is_empty() {
+                return Ok(transfers);
             }
         }
-
         Err(Error::InvalidTypedData)
     }
 }
@@ -169,15 +177,16 @@ impl ExecutableTransaction {
     }
 
     pub async fn estimate_transaction(self, client: &Client) -> Result<EstimatedExecutableTransaction, Error> {
-        let gas_token = self.parameters.gas_token();
-        let transfer = match &self.transaction {
-            ExecutableTransactionParameters::Invoke { invoke, .. } => invoke.find_gas_token_transfer(self.forwarder, gas_token)?,
-            ExecutableTransactionParameters::DeployAndInvoke { invoke, .. } => invoke.find_gas_token_transfer(self.forwarder, gas_token)?,
-            ExecutableTransactionParameters::DirectInvoke { invoke, .. } => invoke.find_gas_token_transfer(self.forwarder, gas_token)?,
+        let transfers = match &self.transaction {
+            ExecutableTransactionParameters::Invoke { invoke, .. } => invoke.find_gas_token_transfers(self.forwarder)?,
+            ExecutableTransactionParameters::DeployAndInvoke { invoke, .. } => invoke.find_gas_token_transfers(self.forwarder)?,
+            ExecutableTransactionParameters::DirectInvoke { invoke, .. } => invoke.find_gas_token_transfers(self.forwarder)?,
             _ => return Err(Error::InvalidTypedData),
         };
 
-        let calls = self.build_calls(transfer);
+        let gas_token = self.parameters.gas_token();
+        let gas_token_amount = transfers.get(&gas_token).cloned().unwrap_or(Felt::ZERO);
+        let calls = self.build_calls(TokenTransfer::new(gas_token, self.gas_tank_address, gas_token_amount));
 
         let estimated_calls = client.estimate(&calls, self.parameters.tip()).await?;
         let fee_estimate = estimated_calls.estimate();
@@ -185,14 +194,15 @@ impl ExecutableTransaction {
         let paid_fee_in_strk = self.compute_paid_fee(client, Felt::from(fee_estimate.overall_fee)).await?;
         let final_fee_estimate = fee_estimate.update_overall_fee(paid_fee_in_strk);
 
-        let token_price = client.price.fetch_token(transfer.token()).await?;
-        let paid_fee_in_token = convert_strk_to_token(&token_price, paid_fee_in_strk, true)?;
-
-        if paid_fee_in_token > transfer.amount() {
-            return Err(Error::MaxAmountTooLow(paid_fee_in_token.to_hex_string()));
+        let total_funding_in_strk = aggregate_transfers_in_strk(client, &transfers).await?;
+        if total_funding_in_strk < paid_fee_in_strk {
+            return Err(Error::MaxAmountTooLow(paid_fee_in_strk.to_hex_string()));
         }
 
-        let fee_transfer = TokenTransfer::new(transfer.token(), self.gas_tank_address, paid_fee_in_token);
+        let token_price = client.price.fetch_token(gas_token).await?;
+        let paid_fee_in_token = convert_strk_to_token(&token_price, paid_fee_in_strk, true)?;
+
+        let fee_transfer = TokenTransfer::new(gas_token, self.gas_tank_address, paid_fee_in_token);
         let final_calls = self.build_calls(fee_transfer);
         let estimated_final_calls = final_calls.with_estimate(final_fee_estimate);
 
@@ -275,52 +285,36 @@ impl ExecutableTransaction {
     }
 }
 
-fn find_gas_token_transfer_from_calls<'a, I>(calls: I, forwarder: Felt, gas_token: Felt) -> Option<TokenTransfer>
+fn collect_gas_transfers_from_calls<'a, I>(calls: I, forwarder: Felt) -> HashMap<Felt, Felt>
 where
     I: IntoIterator<Item = &'a Call>,
 {
-    let total = aggregate_transfer_amount_from_calls(calls, forwarder, gas_token);
-    if total == Felt::ZERO {
-        return None;
-    }
-
-    Some(TokenTransfer::new(gas_token, forwarder, total))
-}
-
-fn aggregate_transfer_amount_from_calls<'a, I>(calls: I, forwarder: Felt, gas_token: Felt) -> Felt
-where
-    I: IntoIterator<Item = &'a Call>,
-{
-    let mut total = Felt::ZERO;
+    let mut transfers = HashMap::new();
     for call in calls {
-        if let Some(amount) = match_transfer_call(call.to, call.selector, &call.calldata, forwarder, gas_token) {
-            total += amount;
-            continue;
-        }
-
-        if is_execute_from_outside_selector(call.selector) {
-            total += aggregate_transfer_amount_from_execute_from_outside_calldata(&call.calldata, forwarder, gas_token);
-        }
+        collect_gas_transfers_from_call(call.to, call.selector, &call.calldata, forwarder, &mut transfers);
     }
-    total
+    transfers
 }
 
-fn aggregate_transfer_amount_from_decoded_calls(decoder: &SequentialCalldataDecoder, forwarder: Felt, gas_token: Felt) -> Felt {
-    let mut total = Felt::ZERO;
+fn collect_gas_transfers_from_decoded_calls(decoder: &SequentialCalldataDecoder, forwarder: Felt, transfers: &mut HashMap<Felt, Felt>) {
     for call in decoder.iter() {
-        if let Some(amount) = match_transfer_call(call.to, call.selector, &call.calldata, forwarder, gas_token) {
-            total += amount;
-            continue;
-        }
-
-        if is_execute_from_outside_selector(call.selector) {
-            total += aggregate_transfer_amount_from_execute_from_outside_calldata(&call.calldata, forwarder, gas_token);
-        }
+        collect_gas_transfers_from_call(call.to, call.selector, &call.calldata, forwarder, transfers);
     }
-    total
 }
 
-fn aggregate_transfer_amount_from_execute_from_outside_calldata(calldata: &[Felt], forwarder: Felt, gas_token: Felt) -> Felt {
+fn collect_gas_transfers_from_call(token: Felt, selector: Felt, calldata: &[Felt], forwarder: Felt, transfers: &mut HashMap<Felt, Felt>) {
+    if let Some((transfer_token, amount)) = match_transfer_call(token, selector, calldata, forwarder) {
+        let entry = transfers.entry(transfer_token).or_insert(Felt::ZERO);
+        *entry += amount;
+        return;
+    }
+
+    if is_execute_from_outside_selector(selector) {
+        collect_gas_transfers_from_execute_from_outside_calldata(calldata, forwarder, transfers);
+    }
+}
+
+fn collect_gas_transfers_from_execute_from_outside_calldata(calldata: &[Felt], forwarder: Felt, transfers: &mut HashMap<Felt, Felt>) {
     fn extract_calls_segment<'a>(calldata: &'a [Felt], calls_len_index: usize) -> Option<&'a [Felt]> {
         let calls_len_felt = calldata.get(calls_len_index)?;
         let calls_len: usize = (*calls_len_felt).try_into().ok()?;
@@ -357,26 +351,24 @@ fn aggregate_transfer_amount_from_execute_from_outside_calldata(calldata: &[Felt
         let Ok(decoder) = SequentialCalldataDecoder::new(calls) else {
             continue;
         };
-
-        let total = aggregate_transfer_amount_from_decoded_calls(&decoder, forwarder, gas_token);
-        if total != Felt::ZERO {
-            return total;
+        let mut nested_transfers = HashMap::new();
+        collect_gas_transfers_from_decoded_calls(&decoder, forwarder, &mut nested_transfers);
+        if !nested_transfers.is_empty() {
+            for (token, amount) in nested_transfers {
+                let entry = transfers.entry(token).or_insert(Felt::ZERO);
+                *entry += amount;
+            }
+            return;
         }
     }
-
-    Felt::ZERO
 }
 
 fn is_execute_from_outside_selector(selector: Felt) -> bool {
     selector == selector!("execute_from_outside") || selector == selector!("execute_from_outside_v3")
 }
 
-fn match_transfer_call(token: Felt, selector: Felt, calldata: &[Felt], forwarder: Felt, gas_token: Felt) -> Option<Felt> {
+fn match_transfer_call(token: Felt, selector: Felt, calldata: &[Felt], forwarder: Felt) -> Option<(Felt, Felt)> {
     if selector != selector!("transfer") {
-        return None;
-    }
-
-    if token != gas_token {
         return None;
     }
 
@@ -386,7 +378,21 @@ fn match_transfer_call(token: Felt, selector: Felt, calldata: &[Felt], forwarder
     }
 
     let amount = calldata.get(1)?;
-    Some(*amount)
+    Some((token, *amount))
+}
+
+async fn aggregate_transfers_in_strk(client: &Client, transfers: &HashMap<Felt, Felt>) -> Result<Felt, Error> {
+    let mut total = Felt::ZERO;
+    for (token, amount) in transfers {
+        let amount_in_strk = if *token == Token::STRK_ADDRESS {
+            *amount
+        } else {
+            client.price.convert_token_to_strk(*token, *amount).await?
+        };
+        total += amount_in_strk;
+    }
+
+    Ok(total)
 }
 
 /// Paymaster executable transaction that can be sent to Starknet
@@ -459,13 +465,11 @@ mod tests {
             },
         };
 
-        let result = parameters.find_gas_token_transfer(forwarder, token);
+        let result = parameters.find_gas_token_transfers(forwarder);
         assert!(result.is_ok());
 
-        let transfer = result.unwrap();
-        assert_eq!(transfer.token(), token);
-        assert_eq!(transfer.recipient(), forwarder);
-        assert_eq!(transfer.amount(), amount);
+        let transfers = result.unwrap();
+        assert_eq!(transfers.get(&token), Some(&amount));
     }
 
     #[test]
@@ -510,13 +514,11 @@ mod tests {
             },
         };
 
-        let result = parameters.find_gas_token_transfer(forwarder, token);
+        let result = parameters.find_gas_token_transfers(forwarder);
         assert!(result.is_ok());
 
-        let transfer = result.unwrap();
-        assert_eq!(transfer.token(), token);
-        assert_eq!(transfer.recipient(), forwarder);
-        assert_eq!(transfer.amount(), amount);
+        let transfers = result.unwrap();
+        assert_eq!(transfers.get(&token), Some(&amount));
     }
 
     #[test]
@@ -550,7 +552,7 @@ mod tests {
             },
         };
 
-        let result = parameters.find_gas_token_transfer(forwarder, felt!("0x456"));
+        let result = parameters.find_gas_token_transfers(forwarder);
         assert!(result.is_err());
     }
 
@@ -586,7 +588,7 @@ mod tests {
             },
         };
 
-        let result = parameters.find_gas_token_transfer(forwarder, felt!("0x789"));
+        let result = parameters.find_gas_token_transfers(forwarder);
         assert!(result.is_err());
     }
 
@@ -611,7 +613,7 @@ mod tests {
             },
         };
 
-        let result = parameters.find_gas_token_transfer(forwarder, felt!("0x456"));
+        let result = parameters.find_gas_token_transfers(forwarder);
         assert!(result.is_err());
     }
 
@@ -635,7 +637,7 @@ mod tests {
             },
         };
 
-        let result = parameters.find_gas_token_transfer(forwarder, felt!("0x456"));
+        let result = parameters.find_gas_token_transfers(forwarder);
         assert!(result.is_err());
     }
 
@@ -677,13 +679,11 @@ mod tests {
             },
         };
 
-        let result = parameters.find_gas_token_transfer(forwarder, token);
+        let result = parameters.find_gas_token_transfers(forwarder);
         assert!(result.is_ok());
 
-        let transfer = result.unwrap();
-        assert_eq!(transfer.token(), token);
-        assert_eq!(transfer.recipient(), forwarder);
-        assert_eq!(transfer.amount(), amount);
+        let transfers = result.unwrap();
+        assert_eq!(transfers.get(&token), Some(&amount));
     }
 
     #[test]
@@ -730,13 +730,59 @@ mod tests {
             },
         };
 
-        let result = parameters.find_gas_token_transfer(forwarder, token);
+        let result = parameters.find_gas_token_transfers(forwarder);
         assert!(result.is_ok());
 
-        let transfer = result.unwrap();
-        assert_eq!(transfer.token(), token);
-        assert_eq!(transfer.recipient(), forwarder);
-        assert_eq!(transfer.amount(), amount_one + amount_two);
+        let transfers = result.unwrap();
+        assert_eq!(transfers.get(&token), Some(&(amount_one + amount_two)));
+    }
+
+    #[test]
+    fn extract_gas_transfer_from_raw_call_collects_multiple_tokens() {
+        let forwarder = felt!("0x123");
+        let token_one = felt!("0x456");
+        let token_two = felt!("0x789");
+        let amount_one = felt!("0x2");
+        let amount_two = felt!("0x4");
+
+        let calldata = vec![
+            felt!("0x1"), // caller
+            felt!("0x2"), // nonce
+            felt!("0x3"), // execute_after
+            felt!("0x4"), // execute_before
+            Felt::TWO,    // num_calls = 2
+            // Transfer token one
+            token_one,
+            selector!("transfer"),
+            Felt::THREE,
+            forwarder,
+            amount_one,
+            Felt::ZERO,
+            // Transfer token two
+            token_two,
+            selector!("transfer"),
+            Felt::THREE,
+            forwarder,
+            amount_two,
+            Felt::ZERO,
+            Felt::ZERO, // signature length
+        ];
+
+        let parameters = ExecutableDirectInvokeParameters {
+            user: Felt::ZERO,
+            execute_from_outside_call: Call {
+                to: felt!("0x999"),
+                selector: selector!("execute_from_outside"),
+                calldata,
+            },
+        };
+
+        let result = parameters.find_gas_token_transfers(forwarder);
+        assert!(result.is_ok());
+
+        let transfers = result.unwrap();
+        assert_eq!(transfers.get(&token_one), Some(&amount_one));
+        assert_eq!(transfers.get(&token_two), Some(&amount_two));
     }
 
     #[test]
@@ -814,13 +860,11 @@ mod tests {
             },
         };
 
-        let result = parameters.find_gas_token_transfer(forwarder, token);
+        let result = parameters.find_gas_token_transfers(forwarder);
         assert!(result.is_ok());
 
-        let transfer = result.unwrap();
-        assert_eq!(transfer.token(), token);
-        assert_eq!(transfer.recipient(), forwarder);
-        assert_eq!(transfer.amount(), amount_outer + amount_one + amount_two);
+        let transfers = result.unwrap();
+        assert_eq!(transfers.get(&token), Some(&(amount_outer + amount_one + amount_two)));
     }
 
     // TODO: enable when we can fix starknet image
