@@ -117,13 +117,20 @@ pub async fn deploy_paymaster_core(params: SetupParameters, skip_user_confirmati
 
     // Load the configuration
     let chain_id = ChainID::from_string(&params.chain_id).map_err(|e| Error::Execution(format!("invalid chain-id {}: {}", params.chain_id, e)))?;
-    let default_rpc_url = match chain_id {
-        ChainID::Mainnet => DEFAULT_MAINNET_RPC_ENDPOINT,
-        // Unknown chains have no canonical RPC; fall back to Sepolia's.
-        ChainID::Sepolia | ChainID::Unknown(_) => DEFAULT_SEPOLIA_RPC_ENDPOINT,
-    };
 
-    let rpc_url = params.rpc_url.unwrap_or_else(|| default_rpc_url.to_string());
+    // Unknown chains have no canonical RPC; the operator must supply one
+    // explicitly. For Sepolia/Mainnet we fall back to the public default.
+    let rpc_url = match (&params.rpc_url, &chain_id) {
+        (Some(url), _) => url.clone(),
+        (None, ChainID::Sepolia) => DEFAULT_SEPOLIA_RPC_ENDPOINT.to_string(),
+        (None, ChainID::Mainnet) => DEFAULT_MAINNET_RPC_ENDPOINT.to_string(),
+        (None, ChainID::Unknown(_)) => {
+            return Err(Error::Execution(format!(
+                "an RPC URL must be provided for non-natively-supported chain id {}",
+                chain_id.as_identifier()
+            )))
+        },
+    };
     let gas_tank_fund_in_fri = normalize_felt(params.fund, 18);
     let estimate_account_fund_in_fri = normalize_felt(params.estimate_account_fund, 18);
     let num_relayers = params.num_relayers;
