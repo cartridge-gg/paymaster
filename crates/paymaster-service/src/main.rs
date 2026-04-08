@@ -36,9 +36,10 @@ async fn main() -> Result<(), Error> {
             warn!(
                 chain_id = %felt.to_hex_string(),
                 "configured chain id is NOT natively supported by the paymaster: \
-                 falling back to Sepolia defaults (USDC token, AVNU swap/token API, \
-                 AVNU exchange address, Coingecko mapping, default RPC URL). \
-                 The configured chain id felt is preserved for transaction signing."
+                 falling back to Sepolia defaults for chain-derived configuration \
+                 (USDC token, AVNU swap/token API, AVNU exchange address, \
+                 Coingecko mapping). The configured chain id felt is preserved \
+                 unchanged for transaction signing and EIP-712 domain separation."
             );
         },
     }
