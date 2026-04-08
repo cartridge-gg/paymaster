@@ -384,3 +384,59 @@ impl ExecuteFromOutsideMessageV2 {
         builder.build(Revision::V1)
     }
 }
+
+#[cfg(test)]
+mod unknown_chain_id_smoke {
+    //! Smoke test that mirrors the manual `paymaster_buildTransaction` check:
+    //! constructing an outside-execution message with `ChainID::Unknown(felt)`
+    //! and verifying the resulting EIP-712 domain carries the supplied felt
+    //! unchanged in both directions.
+    use starknet::core::types::Felt;
+
+    use super::{ExecuteFromOutsideMessageV1, ExecuteFromOutsideMessageV2, ExecuteFromOutsideParameters, TimeBounds};
+    use crate::transaction::Calls;
+    use crate::ChainID;
+
+    fn params(chain_id: ChainID) -> ExecuteFromOutsideParameters {
+        ExecuteFromOutsideParameters {
+            chain_id,
+            caller: Felt::from(0x1234u64),
+            nonce: Felt::from(0x1u64),
+            time_bounds: TimeBounds {
+                execute_after: 1,
+                execute_before: 2,
+            },
+            calls: Calls::new(vec![]),
+        }
+    }
+
+    #[test]
+    fn v1_typed_data_domain_preserves_unknown_chain_id() {
+        let custom = Felt::from_hex("0x534e5f4b41545241").unwrap();
+        let typed_data = ExecuteFromOutsideMessageV1::new(params(ChainID::Unknown(custom)))
+            .to_typed_data()
+            .unwrap();
+
+        assert_eq!(typed_data.encoder().domain().chain_id, custom);
+
+        // Round-trip back through `from_typed_data` and confirm the chain id
+        // still resolves to the same felt.
+        let parsed = ExecuteFromOutsideMessageV1::from_typed_data(&typed_data).unwrap();
+        assert_eq!(parsed.chain_id.as_felt(), custom);
+        assert!(matches!(parsed.chain_id, ChainID::Unknown(f) if f == custom));
+    }
+
+    #[test]
+    fn v2_typed_data_domain_preserves_unknown_chain_id() {
+        let custom = Felt::from_hex("0x534e5f4b41545241").unwrap();
+        let typed_data = ExecuteFromOutsideMessageV2::new(params(ChainID::Unknown(custom)))
+            .to_typed_data()
+            .unwrap();
+
+        assert_eq!(typed_data.encoder().domain().chain_id, custom);
+
+        let parsed = ExecuteFromOutsideMessageV2::from_typed_data(&typed_data).unwrap();
+        assert_eq!(parsed.chain_id.as_felt(), custom);
+        assert!(matches!(parsed.chain_id, ChainID::Unknown(f) if f == custom));
+    }
+}
