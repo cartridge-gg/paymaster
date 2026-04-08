@@ -116,10 +116,12 @@ pub async fn deploy_paymaster_core(params: SetupParameters, skip_user_confirmati
     info!("Starting Paymaster setup for profile: {}", params.profile);
 
     // Load the configuration
-    let chain_id = ChainID::from_string(&params.chain_id).expect("invalid chain-id");
+    let chain_id = ChainID::from_string(&params.chain_id)
+        .map_err(|e| Error::Execution(format!("invalid chain-id {}: {}", params.chain_id, e)))?;
     let default_rpc_url = match chain_id {
-        ChainID::Sepolia => DEFAULT_SEPOLIA_RPC_ENDPOINT,
         ChainID::Mainnet => DEFAULT_MAINNET_RPC_ENDPOINT,
+        // Unknown chains have no canonical RPC; fall back to Sepolia's.
+        ChainID::Sepolia | ChainID::Unknown(_) => DEFAULT_SEPOLIA_RPC_ENDPOINT,
     };
 
     let rpc_url = params.rpc_url.unwrap_or_else(|| default_rpc_url.to_string());

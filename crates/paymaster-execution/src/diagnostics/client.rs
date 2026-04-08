@@ -28,8 +28,9 @@ impl DiagnosticClient {
     pub fn new(chain_id: ChainID) -> Self {
         let token_client = TokenClient::new(chain_id);
         let avnu_contract_address = match chain_id {
-            ChainID::Sepolia => AVNU_EXCHANGE_ADDRESS_SEPOLIA,
             ChainID::Mainnet => AVNU_EXCHANGE_ADDRESS_MAINNET,
+            // Unknown chains reuse the Sepolia AVNU exchange address.
+            ChainID::Sepolia | ChainID::Unknown(_) => AVNU_EXCHANGE_ADDRESS_SEPOLIA,
         };
         Self {
             extractors: vec![Arc::new(AvnuExtractor::new(avnu_contract_address, token_client))],

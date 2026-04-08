@@ -48,15 +48,16 @@ impl Token {
 
     pub const fn usdc(chain_id: &ChainID) -> Token {
         match chain_id {
-            ChainID::Sepolia => Token {
-                symbol: "USDC",
-                decimals: 6,
-                address: felt!("0x53b40a647cedfca6ca84f542a0fe36736031905a9639a7f19a3c1e66bfd5080"),
-            },
             ChainID::Mainnet => Token {
                 symbol: "USDC",
                 decimals: 6,
                 address: felt!("0x53c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8"),
+            },
+            // Sepolia and any unknown chain id fall back to the Sepolia USDC.
+            ChainID::Sepolia | ChainID::Unknown(_) => Token {
+                symbol: "USDC",
+                decimals: 6,
+                address: felt!("0x53b40a647cedfca6ca84f542a0fe36736031905a9639a7f19a3c1e66bfd5080"),
             },
         }
     }
