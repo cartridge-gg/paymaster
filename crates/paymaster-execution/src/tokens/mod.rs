@@ -79,10 +79,12 @@ impl TokenClient {
     }
 
     /// Creates a new token service based on chain ID.
+    ///
+    /// Unknown chains fall back to the Sepolia AVNU API.
     pub fn new(chain_id: ChainID) -> Self {
         match chain_id {
-            ChainID::Sepolia => Self::sepolia(),
             ChainID::Mainnet => Self::mainnet(),
+            ChainID::Sepolia | ChainID::Unknown(_) => Self::sepolia(),
         }
     }
 
@@ -183,6 +185,12 @@ mod tests {
         #[test]
         fn should_use_sepolia_url_for_sepolia_chain() {
             let client = TokenClient::new(ChainID::Sepolia);
+            assert_eq!(client.base_url, AVNU_API_SEPOLIA_URL);
+        }
+
+        #[test]
+        fn should_use_sepolia_url_for_unknown_chain() {
+            let client = TokenClient::new(ChainID::Unknown(Felt::from_hex("0x534e5f4b41545241").unwrap()));
             assert_eq!(client.base_url, AVNU_API_SEPOLIA_URL);
         }
     }

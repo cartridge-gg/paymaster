@@ -49,8 +49,9 @@ pub struct AVNUPriceClientConfiguration {
 impl AVNUPriceClientConfiguration {
     pub fn default_from_chain(chain_id: ChainID) -> Self {
         match chain_id {
-            ChainID::Sepolia => Self::default_sepolia(),
             ChainID::Mainnet => Self::default_mainnet(),
+            // Unknown chains fall back to the Sepolia AVNU price endpoint.
+            ChainID::Sepolia | ChainID::Unknown(_) => Self::default_sepolia(),
         }
     }
 
