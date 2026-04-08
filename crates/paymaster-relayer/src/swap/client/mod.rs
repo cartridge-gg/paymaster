@@ -40,8 +40,9 @@ pub struct SwapClientConfiguration {
 impl SwapClientConfiguration {
     pub fn default_from_chain(chain_id: ChainID) -> Self {
         match chain_id {
-            ChainID::Sepolia => Self::default_sepolia(),
             ChainID::Mainnet => Self::default_mainnet(),
+            // Unknown chains fall back to the Sepolia AVNU swap config.
+            ChainID::Sepolia | ChainID::Unknown(_) => Self::default_sepolia(),
         }
     }
 
@@ -65,10 +66,8 @@ impl SwapClientConfiguration {
         if self.endpoint.is_empty() {
             return Err(ServiceError::new("AVNU endpoint cannot be empty"));
         }
-        // Validate chain ID
-        if self.chain_id.as_felt() != ChainID::Mainnet.as_felt() && self.chain_id.as_felt() != ChainID::Sepolia.as_felt() {
-            return Err(ServiceError::new("Swap service is only supported on Starknet mainnet & Sepolia testnet"));
-        }
+        // Any chain id is accepted: Mainnet/Sepolia use their respective AVNU
+        // deployments, and Unknown chains reuse the Sepolia configuration.
         Ok(())
     }
 }
@@ -144,5 +143,25 @@ impl SwapClient {
                     .await
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_accepts_unknown_chain_id() {
+        let config = SwapClientConfiguration {
+            endpoint: DEFAULT_SEPOLIA_AVNU_SWAP_ENDPOINT.to_string(),
+            chain_id: ChainID::Unknown(Felt::from_hex("0x534e5f4b41545241").unwrap()),
+        };
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn default_from_chain_unknown_falls_back_to_sepolia() {
+        let config = SwapClientConfiguration::default_from_chain(ChainID::Unknown(Felt::from_hex("0x534e5f4b41545241").unwrap()));
+        assert_eq!(config.endpoint, DEFAULT_SEPOLIA_AVNU_SWAP_ENDPOINT);
     }
 }
