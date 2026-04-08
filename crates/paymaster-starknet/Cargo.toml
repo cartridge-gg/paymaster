@@ -22,3 +22,6 @@ chrono = { workspace = true }
 testcontainers = { workspace = true, optional = true }
 tracing = { workspace = true, features = ['attributes'] }
 uuid = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
