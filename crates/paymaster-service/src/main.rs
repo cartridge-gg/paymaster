@@ -11,9 +11,16 @@ use crate::rpc::RPCService;
 
 mod core;
 mod rpc;
+mod version;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
+    let args: Vec<String> = std::env::args().collect();
+    if args.iter().any(|a| a == "--version" || a == "-V") {
+        println!("paymaster-service {}", version::long());
+        return Ok(());
+    }
+
     let context = Context::load()?;
 
     let metric_layer = context.configuration.prometheus.clone().map(|x| Metric::layer(&x));
