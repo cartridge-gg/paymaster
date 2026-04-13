@@ -25,7 +25,7 @@ impl Fmt {
     where
         S: for<'span> tracing_subscriber::registry::LookupSpan<'span> + tracing::Subscriber,
     {
-        let ansi = std::io::IsTerminal::is_terminal(&std::io::stdout());
+        let ansi = true;
 
         let default_filter = EnvFilter::try_new(DEFAULT_LOG_FILTER);
         let filter = EnvFilter::try_from_default_env().or(default_filter).expect("valid env filter");
