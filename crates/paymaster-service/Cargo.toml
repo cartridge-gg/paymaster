@@ -6,6 +6,7 @@ repository = { workspace = true }
 
 [dependencies]
 async-trait = { workspace = true }
+chrono = { workspace = true }
 envy = { workspace = true }
 log = { workspace = true }
 lazy_static = { workspace = true }
@@ -24,7 +25,7 @@ starknet = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["time", "sync", "macros", "rt-multi-thread"] }
 tracing = { workspace = true, features = ['attributes'] }
-tracing-subscriber = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
 tracing-opentelemetry = { workspace = true }
 opentelemetry = { workspace = true }
 opentelemetry_sdk = { workspace = true }
