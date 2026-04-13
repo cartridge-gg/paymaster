@@ -24,9 +24,9 @@ async fn main() -> Result<(), Error> {
     let context = Context::load()?;
 
     let metric_layer = context.configuration.prometheus.clone().map(|x| Metric::layer(&x));
-    let fmt_layer = Fmt::layer(&context.configuration.verbosity);
+    let (fmt_layer, env_filter) = Fmt::layer();
 
-    let subscriber = Registry::default().with(fmt_layer).with(metric_layer);
+    let subscriber = Registry::default().with(env_filter).with(fmt_layer).with(metric_layer);
 
     tracing::subscriber::set_global_default(subscriber).unwrap();
 
