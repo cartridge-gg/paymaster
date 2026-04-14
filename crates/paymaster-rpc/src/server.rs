@@ -97,19 +97,19 @@ impl PaymasterAPIServer for PaymasterServer {
         instrument_method!(is_available_endpoint(&context))
     }
 
-    #[instrument(name = "paymaster_buildTransaction", skip(self, ext, params), fields(params = %serde_json::to_string(&params).unwrap_or_else(|_| "INVALID_JSON".into())))]
+    #[instrument(name = "paymaster_buildTransaction", skip(self, ext, params))]
     async fn build_transaction(&self, ext: &Extensions, params: BuildTransactionRequest) -> Result<BuildTransactionResponse, Error> {
         let context = RequestContext::new(&self.context, ext);
         instrument_method!(build_transaction_endpoint(&context, params))
     }
 
-    #[instrument(name = "paymaster_executeTransaction", skip(self, ext, params), fields(params = %serde_json::to_string(&params).unwrap_or_else(|_| "INVALID_JSON".into())))]
+    #[instrument(name = "paymaster_executeTransaction", skip(self, ext, params))]
     async fn execute_transaction(&self, ext: &Extensions, params: ExecuteRequest) -> Result<ExecuteResponse, Error> {
         let context = RequestContext::new(&self.context, ext);
         instrument_method!(execute_endpoint(&context, params))
     }
 
-    #[instrument(name = "paymaster_executeDirectTransaction", skip(self, ext, params), fields(params = %serde_json::to_string(&params).unwrap_or_else(|_| "INVALID_JSON".into())))]
+    #[instrument(name = "paymaster_executeDirectTransaction", skip(self, ext, params))]
     async fn execute_direct_transaction(&self, ext: &Extensions, params: ExecuteDirectRequest) -> Result<ExecuteDirectResponse, Error> {
         let context = RequestContext::new(&self.context, ext);
         instrument_method!(execute_direct_endpoint(&context, params))
