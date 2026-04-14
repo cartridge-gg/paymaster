@@ -1,4 +1,4 @@
-use paymaster_common::service::monitoring::Metric;
+use paymaster_common::service::monitoring::{self, Metric, Tracer};
 use paymaster_common::service::{Error, ServiceManager};
 use paymaster_starknet::ChainID;
 use tracing::{info, warn};
@@ -23,10 +23,16 @@ async fn main() -> Result<(), Error> {
 
     let context = Context::load()?;
 
+    let tracer_layer = context.configuration.prometheus.clone().map(|x| Tracer::layer(&x));
     let metric_layer = context.configuration.prometheus.clone().map(|x| Metric::layer(&x));
     let (fmt_layer, env_filter) = Fmt::layer();
 
-    let subscriber = Registry::default().with(env_filter).with(fmt_layer).with(metric_layer);
+    // Layer ordering mirrors katana: filter → telemetry → fmt → metrics.
+    let subscriber = Registry::default()
+        .with(env_filter)
+        .with(tracer_layer)
+        .with(fmt_layer)
+        .with(metric_layer);
 
     tracing::subscriber::set_global_default(subscriber).unwrap();
 
@@ -56,5 +62,10 @@ async fn main() -> Result<(), Error> {
     services.spawn::<RPCService>();
 
     info!("all services started");
-    services.wait()
+    let result = services.wait();
+
+    // Flush any buffered OTLP spans before exiting.
+    monitoring::shutdown();
+
+    result
 }
