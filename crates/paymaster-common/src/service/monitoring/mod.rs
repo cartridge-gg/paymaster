@@ -3,10 +3,13 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 mod tracer;
-pub use tracer::Tracer;
+pub use tracer::{shutdown, Tracer};
 
 mod metric;
 pub use metric::Metric;
+
+mod http;
+pub use http::{trace_layer, OtelMakeSpan};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Configuration {

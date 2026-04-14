@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use hyper::http::Extensions;
 use jsonrpsee::server::middleware::http::ProxyGetRequestLayer;
 use jsonrpsee::server::{RpcServiceBuilder, ServerBuilder, ServerHandle};
+use paymaster_common::service::monitoring::trace_layer;
 use paymaster_common::service::Error as ServiceError;
 use paymaster_common::{measure_duration, metric};
 use tower::ServiceBuilder;
@@ -59,7 +60,11 @@ impl PaymasterServer {
         let url = format!("0.0.0.0:{}", self.context.configuration.rpc.port);
         info!("Starting RPC server at {}", url);
 
+        // `trace_layer()` goes first so it wraps every other middleware —
+        // inbound `traceparent` headers are extracted into a root span
+        // before auth / CORS / health-proxy run.
         let http_middleware = ServiceBuilder::new()
+            .layer(trace_layer())
             .layer(CorsLayer::permissive())
             .layer(AuthenticationLayer)
             .layer(ProxyGetRequestLayer::new("/health", "paymaster_health").unwrap());
