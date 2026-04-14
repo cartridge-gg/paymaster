@@ -21,9 +21,7 @@ pub struct OtelMakeSpan;
 
 impl<B> MakeSpan<B> for OtelMakeSpan {
     fn make_span(&mut self, request: &http::Request<B>) -> Span {
-        let cx = opentelemetry::global::get_text_map_propagator(|propagator| {
-            propagator.extract(&HeaderExtractor(request.headers()))
-        });
+        let cx = opentelemetry::global::get_text_map_propagator(|propagator| propagator.extract(&HeaderExtractor(request.headers())));
         let span = tracing::info_span!(
             "http_request",
             method = %request.method(),
@@ -58,9 +56,7 @@ mod tests {
     }
 
     fn extract_parent<B>(req: &http::Request<B>) -> Context {
-        opentelemetry::global::get_text_map_propagator(|propagator| {
-            propagator.extract(&HeaderExtractor(req.headers()))
-        })
+        opentelemetry::global::get_text_map_propagator(|propagator| propagator.extract(&HeaderExtractor(req.headers())))
     }
 
     #[test]
@@ -81,10 +77,7 @@ mod tests {
         let trace_id_hex = "0af7651916cd43dd8448eb211c80319c";
         let req = http::Request::builder()
             .uri("/paymaster_buildTransaction")
-            .header(
-                "traceparent",
-                format!("00-{trace_id_hex}-b7ad6b7169203331-01"),
-            )
+            .header("traceparent", format!("00-{trace_id_hex}-b7ad6b7169203331-01"))
             .body(())
             .unwrap();
 
