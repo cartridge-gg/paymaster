@@ -16,9 +16,7 @@ enum LogFormat {
 impl LogFormat {
     fn from_env() -> Self {
         match std::env::var(LOG_FORMAT_ENV) {
-            Ok(value) => Self::parse(&value).unwrap_or_else(|| {
-                panic!("invalid {LOG_FORMAT_ENV}={value:?}; expected one of: text, json")
-            }),
+            Ok(value) => Self::parse(&value).unwrap_or_else(|| panic!("invalid {LOG_FORMAT_ENV}={value:?}; expected one of: text, json")),
             Err(std::env::VarError::NotPresent) => DEFAULT_LOG_FORMAT,
             Err(std::env::VarError::NotUnicode(value)) => {
                 panic!("invalid {LOG_FORMAT_ENV}={value:?}; value must be valid UTF-8")
@@ -58,15 +56,10 @@ impl Fmt {
         let ansi = std::io::IsTerminal::is_terminal(&std::io::stdout());
 
         let default_filter = EnvFilter::try_new(DEFAULT_LOG_FILTER);
-        let filter = EnvFilter::try_from_default_env()
-            .or(default_filter)
-            .expect("valid env filter");
+        let filter = EnvFilter::try_from_default_env().or(default_filter).expect("valid env filter");
 
         let layer = match LogFormat::from_env() {
-            LogFormat::Text => tracing_subscriber::fmt::layer()
-                .with_timer(LocalTime)
-                .with_ansi(ansi)
-                .boxed(),
+            LogFormat::Text => tracing_subscriber::fmt::layer().with_timer(LocalTime).with_ansi(ansi).boxed(),
             LogFormat::Json => tracing_subscriber::fmt::layer()
                 .json()
                 .flatten_event(true)
