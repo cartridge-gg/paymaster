@@ -2,6 +2,8 @@ use starknet::core::types::{FeeEstimate, Felt, PriceUnit};
 
 use crate::Error;
 
+const RESOURCE_BOUNDS_MULTIPLIER: f64 = 2.5;
+
 #[derive(Debug, Clone)]
 pub struct TransactionGasEstimate {
     pub overall_fee: u128,
@@ -29,8 +31,8 @@ impl TransactionGasEstimate {
             l1_data_gas_consumed: estimate.l1_data_gas_consumed,
             tip,
             unit: PriceUnit::Fri,
-            gas_estimate_multiplier: 1.5,
-            gas_price_estimate_multiplier: 1.5,
+            gas_estimate_multiplier: RESOURCE_BOUNDS_MULTIPLIER,
+            gas_price_estimate_multiplier: RESOURCE_BOUNDS_MULTIPLIER,
         }
     }
 
@@ -100,4 +102,49 @@ fn felt_to_u128(felt: &Felt) -> u128 {
     let bytes = felt.to_bytes_le();
     let slice: [u8; 16] = bytes[..16].try_into().expect("Felt should have at least 16 bytes");
     u128::from_le_bytes(slice)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gas_amounts_apply_resource_bounds_headroom() {
+        let estimate = TransactionGasEstimate::new(
+            FeeEstimate {
+                l1_gas_consumed: 10,
+                l1_gas_price: 100,
+                l2_gas_consumed: 20,
+                l2_gas_price: 200,
+                l1_data_gas_consumed: 960,
+                l1_data_gas_price: 300,
+                overall_fee: 1_000,
+            },
+            1,
+        );
+
+        assert_eq!(estimate.l1_gas_consumed(), 25);
+        assert_eq!(estimate.l2_gas_consumed(), 50);
+        assert_eq!(estimate.l1_data_gas_consumed(), 2_400);
+    }
+
+    #[test]
+    fn gas_prices_apply_resource_bounds_headroom() {
+        let estimate = TransactionGasEstimate::new(
+            FeeEstimate {
+                l1_gas_consumed: 10,
+                l1_gas_price: 100,
+                l2_gas_consumed: 20,
+                l2_gas_price: 200,
+                l1_data_gas_consumed: 30,
+                l1_data_gas_price: 300,
+                overall_fee: 1_000,
+            },
+            1,
+        );
+
+        assert_eq!(estimate.l1_gas_price().unwrap(), 250);
+        assert_eq!(estimate.l2_gas_price().unwrap(), 500);
+        assert_eq!(estimate.l1_data_gas_price().unwrap(), 750);
+    }
 }
