@@ -65,6 +65,7 @@ pub async fn command_balances(params: BalancesCommandParameters) -> Result<(), E
         chain_id,
         fallbacks: vec![],
         timeout: 10,
+        resource_bounds_multiplier: configuration.starknet.resource_bounds_multiplier,
     });
 
     // Display relayers balances

@@ -2,7 +2,7 @@ use starknet::core::types::{FeeEstimate, Felt, PriceUnit};
 
 use crate::Error;
 
-const RESOURCE_BOUNDS_MULTIPLIER: f64 = 2.5;
+pub const DEFAULT_RESOURCE_BOUNDS_MULTIPLIER: f64 = 2.5;
 
 #[derive(Debug, Clone)]
 pub struct TransactionGasEstimate {
@@ -21,6 +21,10 @@ pub struct TransactionGasEstimate {
 
 impl TransactionGasEstimate {
     pub fn new(estimate: FeeEstimate, tip: u64) -> Self {
+        Self::new_with_resource_bounds_multiplier(estimate, tip, DEFAULT_RESOURCE_BOUNDS_MULTIPLIER)
+    }
+
+    pub fn new_with_resource_bounds_multiplier(estimate: FeeEstimate, tip: u64, resource_bounds_multiplier: f64) -> Self {
         Self {
             overall_fee: estimate.overall_fee,
             l1_gas_price: estimate.l1_gas_price,
@@ -31,8 +35,8 @@ impl TransactionGasEstimate {
             l1_data_gas_consumed: estimate.l1_data_gas_consumed,
             tip,
             unit: PriceUnit::Fri,
-            gas_estimate_multiplier: RESOURCE_BOUNDS_MULTIPLIER,
-            gas_price_estimate_multiplier: RESOURCE_BOUNDS_MULTIPLIER,
+            gas_estimate_multiplier: resource_bounds_multiplier,
+            gas_price_estimate_multiplier: resource_bounds_multiplier,
         }
     }
 

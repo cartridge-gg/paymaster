@@ -74,6 +74,7 @@ impl TestEnvironment {
             chain_id: Self::CHAIN_ID,
             timeout: 10,
             endpoint,
+            resource_bounds_multiplier: crate::transaction::DEFAULT_RESOURCE_BOUNDS_MULTIPLIER,
             fallbacks: vec![],
         };
 

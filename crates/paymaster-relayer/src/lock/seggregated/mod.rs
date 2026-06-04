@@ -153,6 +153,7 @@ mod tests {
                 chain_id: ChainID::Sepolia,
                 fallbacks: vec![],
                 timeout: 10,
+                resource_bounds_multiplier: paymaster_starknet::transaction::DEFAULT_RESOURCE_BOUNDS_MULTIPLIER,
             },
             supported_tokens: HashSet::from([Token::usdc(&ChainID::Sepolia).address]),
             gas_tank: StarknetAccountConfiguration {

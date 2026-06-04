@@ -11,7 +11,7 @@ mod call;
 pub use call::*;
 
 mod gas;
-pub use gas::TransactionGasEstimate;
+pub use gas::{TransactionGasEstimate, DEFAULT_RESOURCE_BOUNDS_MULTIPLIER};
 use paymaster_common::enum_dispatch;
 
 mod time;

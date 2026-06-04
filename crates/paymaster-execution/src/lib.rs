@@ -80,6 +80,7 @@ pub struct Client {
 
     max_fee_multiplier: f32,
     provider_fee_multiplier: f32,
+    resource_bounds_multiplier: f64,
 
     estimate_account: StarknetAccount,
     relayers: RelayerManager,
@@ -96,6 +97,7 @@ impl Client {
 
             max_fee_multiplier: configuration.max_fee_multiplier,
             provider_fee_multiplier: 1.0 + configuration.provider_fee_overhead,
+            resource_bounds_multiplier: configuration.starknet.resource_bounds_multiplier,
 
             estimate_account: Starknet::new(&configuration.starknet).initialize_account(&configuration.estimate_account),
             relayers: RelayerManager::new(&configuration.clone().into()),
@@ -151,7 +153,9 @@ impl Client {
     /// Estimate the gas cost of a sequence of calls using the account configured for estimation
     pub async fn estimate(&self, calls: &Calls, tip: TipPriority) -> Result<EstimatedCalls, Error> {
         let tip = self.get_tip(tip).await?;
-        let result = calls.estimate(&self.estimate_account, Some(tip)).await?;
+        let result = calls
+            .estimate_with_resource_bounds_multiplier(&self.estimate_account, Some(tip), self.resource_bounds_multiplier)
+            .await?;
 
         Ok(result)
     }

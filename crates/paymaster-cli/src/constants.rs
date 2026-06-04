@@ -13,6 +13,7 @@ pub const DEFAULT_MAX_CHECK_STATUS_ATTEMPTS: usize = 5;
 
 // Paymaster configuration defaults
 pub const DEFAULT_MAX_FEE_MULTIPLIER: f32 = 3.0;
+pub const DEFAULT_RESOURCE_BOUNDS_MULTIPLIER: f64 = paymaster_starknet::transaction::DEFAULT_RESOURCE_BOUNDS_MULTIPLIER;
 pub const DEFAULT_SPONSORING_MODE: SponsoringConfiguration = SponsoringConfiguration::None;
 pub const DEFAULT_PROVIDER_FEE_OVERHEAD: f32 = 0.1;
 

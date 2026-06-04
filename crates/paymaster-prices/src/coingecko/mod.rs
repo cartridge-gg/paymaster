@@ -186,6 +186,7 @@ mod tests {
                 chain_id: ChainID::Mainnet,
                 timeout: 10,
                 fallbacks: vec![],
+                resource_bounds_multiplier: paymaster_starknet::transaction::DEFAULT_RESOURCE_BOUNDS_MULTIPLIER,
             },
         });
 
