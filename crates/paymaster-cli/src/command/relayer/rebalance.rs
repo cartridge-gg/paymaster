@@ -56,6 +56,7 @@ pub async fn command_relayers_rebalance(params: RelayersRebalanceCommandParamete
         chain_id: chain_id.clone(),
         fallbacks: vec![],
         timeout: configuration.starknet.timeout,
+        resource_bounds_multiplier: configuration.starknet.resource_bounds_multiplier,
     });
 
     // How much STRK to refund the gas tank with from the master account

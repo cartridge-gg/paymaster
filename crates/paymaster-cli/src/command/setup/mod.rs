@@ -9,8 +9,8 @@ use crate::command::relayer::build::RelayerDeployment;
 use crate::constants::{
     DEFAULT_INITIAL_ESTIMATE_ACCOUNT_FUND_AMOUNT, DEFAULT_INITIAL_GAS_TANK_FUND_AMOUNT, DEFAULT_MAX_CHECK_STATUS_ATTEMPTS, DEFAULT_MAX_FEE_MULTIPLIER,
     DEFAULT_MAX_PRICE_IMPACT, DEFAULT_MIN_RELAYER_BALANCE, DEFAULT_MIN_SWAP_SELL_AMOUNT, DEFAULT_PROVIDER_FEE_OVERHEAD, DEFAULT_REBALANCING_CHECK_INTERVAL,
-    DEFAULT_RELAYERS_LOCK_MODE, DEFAULT_RELAYERS_NUM, DEFAULT_RELAYERS_REBALANCE_TRIGGER_AMOUNT, DEFAULT_RPC_PORT, DEFAULT_SPONSORING_MODE, DEFAULT_STARKNET_TIMEOUT,
-    DEFAULT_SWAP_INTERVAL, DEFAULT_SWAP_SLIPPAGE, DEFAULT_VERBOSITY,
+    DEFAULT_RELAYERS_LOCK_MODE, DEFAULT_RELAYERS_NUM, DEFAULT_RELAYERS_REBALANCE_TRIGGER_AMOUNT, DEFAULT_RESOURCE_BOUNDS_MULTIPLIER, DEFAULT_RPC_PORT,
+    DEFAULT_SPONSORING_MODE, DEFAULT_STARKNET_TIMEOUT, DEFAULT_SWAP_INTERVAL, DEFAULT_SWAP_SLIPPAGE, DEFAULT_VERBOSITY,
 };
 use crate::core::starknet::transaction::status::wait_for_transaction_success;
 use crate::core::Error;
@@ -75,6 +75,9 @@ pub struct SetupParameters {
 
     #[clap(long, default_value_t = DEFAULT_MAX_FEE_MULTIPLIER)]
     pub max_fee_multiplier: f32,
+
+    #[clap(long, default_value_t = DEFAULT_RESOURCE_BOUNDS_MULTIPLIER)]
+    pub resource_bounds_multiplier: f64,
 
     #[clap(long, default_value_t = DEFAULT_PROVIDER_FEE_OVERHEAD)]
     pub fee_overhead: f32,
@@ -168,6 +171,7 @@ pub async fn deploy_paymaster_core(params: SetupParameters, skip_user_confirmati
         chain_id,
         fallbacks: vec![],
         timeout: 10,
+        resource_bounds_multiplier: params.resource_bounds_multiplier,
     });
 
     // Check that the initial funding is enough for rebalancing to work properly
@@ -242,6 +246,7 @@ pub async fn deploy_paymaster_core(params: SetupParameters, skip_user_confirmati
             chain_id,
             fallbacks: vec![],
             timeout: params.rpc_timeout,
+            resource_bounds_multiplier: params.resource_bounds_multiplier,
         },
         rpc: RPCConfiguration { port: params.rpc_port },
         prometheus: None,

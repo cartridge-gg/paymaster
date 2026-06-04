@@ -65,6 +65,7 @@ pub async fn command_relayers_deploy(params: RelayersDeployCommandParameters) ->
         chain_id,
         fallbacks: vec![],
         timeout: configuration.starknet.timeout,
+        resource_bounds_multiplier: configuration.starknet.resource_bounds_multiplier,
     });
 
     // Assert the balance of master is greater than the amount of STRK needed for the deployment

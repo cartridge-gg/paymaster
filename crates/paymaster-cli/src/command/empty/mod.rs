@@ -191,6 +191,7 @@ pub async fn command_empty_paymaster(params: EmptyPaymasterParameters) -> Result
         chain_id: chain_id.clone(),
         fallbacks: vec![],
         timeout: configuration.starknet.timeout,
+        resource_bounds_multiplier: configuration.starknet.resource_bounds_multiplier,
     });
 
     empty_paymaster_core(&starknet, &configuration, params.master_address, params.master_pk, params.force).await?;

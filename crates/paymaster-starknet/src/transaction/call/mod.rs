@@ -10,7 +10,9 @@ use starknet::providers::{Provider, ProviderError};
 use starknet::signers::SigningKey;
 use tracing::error;
 
-use crate::transaction::{ExecuteFromOutsideMessage, ExecuteFromOutsideParameters, PaymasterVersion, TimeBounds, TransactionGasEstimate};
+use crate::transaction::{
+    ExecuteFromOutsideMessage, ExecuteFromOutsideParameters, PaymasterVersion, TimeBounds, TransactionGasEstimate, DEFAULT_RESOURCE_BOUNDS_MULTIPLIER,
+};
 use crate::{ChainID, Error, StarknetAccount};
 
 mod calldata;
@@ -55,6 +57,16 @@ impl Calls {
     }
 
     pub async fn estimate(&self, account: &StarknetAccount, tip: Option<u64>) -> Result<EstimatedCalls, Error> {
+        self.estimate_with_resource_bounds_multiplier(account, tip, DEFAULT_RESOURCE_BOUNDS_MULTIPLIER)
+            .await
+    }
+
+    pub async fn estimate_with_resource_bounds_multiplier(
+        &self,
+        account: &StarknetAccount,
+        tip: Option<u64>,
+        resource_bounds_multiplier: f64,
+    ) -> Result<EstimatedCalls, Error> {
         let tip = match tip {
             None => {
                 let block = account.provider().get_block_with_txs(BlockId::Tag(BlockTag::Latest)).await?;
@@ -65,7 +77,9 @@ impl Calls {
 
         let result = account.execute_v3(self.to_vec()).tip(tip).estimate_fee().await?;
 
-        Ok(self.clone().with_estimate(TransactionGasEstimate::new(result, tip)))
+        Ok(self
+            .clone()
+            .with_estimate(TransactionGasEstimate::new_with_resource_bounds_multiplier(result, tip, resource_bounds_multiplier)))
     }
 
     pub async fn execute(&self, account: &StarknetAccount, nonce: Felt) -> Result<InvokeTransactionResult, Error> {

@@ -155,8 +155,15 @@ pub struct Configuration {
     pub endpoint: String,
     pub timeout: u64,
 
+    #[serde(default = "default_resource_bounds_multiplier")]
+    pub resource_bounds_multiplier: f64,
+
     #[serde(default)]
     pub fallbacks: Vec<String>,
+}
+
+fn default_resource_bounds_multiplier() -> f64 {
+    transaction::DEFAULT_RESOURCE_BOUNDS_MULTIPLIER
 }
 
 #[derive(Clone)]
@@ -329,5 +336,24 @@ impl Client {
         metric!(on error result => counter [ starknet_rpc_error ] = 1, method = "get_transaction");
 
         Ok(result?)
+    }
+}
+
+#[cfg(test)]
+mod configuration_tests {
+    use super::*;
+
+    #[test]
+    fn resource_bounds_multiplier_defaults_for_existing_profiles() {
+        let configuration: Configuration = serde_json::from_str(
+            r#"{
+                "chain_id": "sepolia",
+                "endpoint": "http://localhost:5050",
+                "timeout": 10
+            }"#,
+        )
+        .expect("configuration should deserialize");
+
+        assert_eq!(configuration.resource_bounds_multiplier, transaction::DEFAULT_RESOURCE_BOUNDS_MULTIPLIER);
     }
 }

@@ -208,6 +208,7 @@ mod tests {
                     endpoint: "https://dummy".to_string(),
                     chain_id: ChainID::Sepolia,
                     timeout: 10,
+                    resource_bounds_multiplier: paymaster_starknet::transaction::DEFAULT_RESOURCE_BOUNDS_MULTIPLIER,
                     fallbacks: vec![],
                 },
                 supported_tokens: HashSet::from([Token::usdc(&ChainID::Sepolia).address]),

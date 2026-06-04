@@ -585,6 +585,7 @@ mod rebalancing_tests {
                 endpoint: "http://localhost:5050".to_string(),
                 fallbacks: vec![],
                 timeout: 10,
+                resource_bounds_multiplier: paymaster_starknet::transaction::DEFAULT_RESOURCE_BOUNDS_MULTIPLIER,
             },
             supported_tokens: HashSet::from([Token::usdc(&ChainID::Sepolia).address]),
             relayers: RelayersConfiguration {
